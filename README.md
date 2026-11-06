@@ -50,13 +50,17 @@ não foram testados.** O `extrator-enem sonda` é o primeiro teste nessas máqui
 | | 2024 | 2025 |
 |---|---|---|
 | Questões encontradas | 90 de 90 | 90 de 90 |
-| Marcadas para conferir | 16 | 12 |
+| Marcadas para conferir | 9 | 6 |
 | Gabarito: letra / anulada | 89 / 1 | 87 / 3 |
-| Tempo | ~8 s | ~8 s |
+| Tempo | ~20 s | ~20 s |
 
-Dos 16 defeitos conhecidos do briefing, um foi corrigido (gráficos da 2025 Q129), 14 são sinalizados e
-2 passam sem alerta: as setas de equilíbrio da 2024 Q94 e o número misto da Q142. Esses dois estão
-nos testes como falha esperada. Sinalizar **não é corrigir**, e esses números não medem fidelidade.
+Dos 16 defeitos conhecidos do briefing: 1 foi corrigido (gráficos da 2025 Q129), 14 são sinalizados e 1
+passa sem alerta (o número misto da 2024 Q142). Na Q94 o alerta existe, mas a seta de equilíbrio continua
+sem ser recuperada. Esses dois casos estão nos testes como falha esperada. Sinalizar **não é corrigir**,
+e estes números não medem fidelidade.
+
+Números conferidos em 06/11/2026 numa extração nova, no Linux: 2024 teve 9 questões `needs_review`
+e 2025 teve 6, e as 90 questões de cada prova foram encontradas.
 
 ## Os alertas
 
