@@ -13,3 +13,21 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: python -m extrator_enem.cli sonda   # isolamento real ou CI vermelho (falha fechada)
       - run: pytest -q   # testes com PDFs reais se pulam sem dados/provas (não versionados)
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -e '.[dev]'
+      - run: EXTRATOR_SANDBOX=docker python -m extrator_enem.cli sonda
+      - run: EXTRATOR_SANDBOX=docker pytest -q tests/test_sandbox.py
+  macos:
+    runs-on: macos-latest   # runners macOS não trazem Docker: valida só que a recusa é fechada
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -e '.[dev]'
+      - run: "! python -m extrator_enem.cli sonda"   # sem Docker/bwrap tem que falhar (exit 3), nunca rodar sem isolamento
+      - run: pytest -q tests/test_gabarito.py tests/test_store.py

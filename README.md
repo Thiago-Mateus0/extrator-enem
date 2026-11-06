@@ -53,7 +53,7 @@ Ver `docs/FORMATO.md` (layout em disco, campos, hashes, gabarito, revisão) e
 - Sobrescrito `^{..}`, subscrito `_{..}`, fração `\frac{num}{den}`; toda fração reconstruída tem alerta `frac_reconstructed`.
 - Alternativa só em figura: texto vazio + `choice_image_only` (info) + `asset_ids` da figura da mesma altura do rótulo.
 - Gabarito: `found` / `annulled` / `not_provided`; outro caderno/ano/dia é recusado. Nunca se infere resposta.
-- Parser roda em `bwrap` (rede/home negados, raiz somente leitura, sem credenciais, rlimits CPU/mem/arquivo/tempo/volume);
+- Parser roda isolado, em um de dois backends (veja "Rodar em macOS/Windows" abaixo): `bwrap` (Linux) ou `docker` (qualquer sistema). Em ambos: rede/home negados, raiz somente leitura, sem credenciais, limites de CPU/mem/arquivo/tempo/volume, mesma sonda e mesma validação da saída;
   se o isolamento ou a sonda falhar, **nada roda**.
 
 ## Alertas (`issues[].code`)
@@ -72,3 +72,18 @@ Ver `docs/FORMATO.md` (layout em disco, campos, hashes, gabarito, revisão) e
 - OCR/visão (adiado por decisão do responsável; ver `docs/DECISOES_PENDENTES.md`).
 - Bbox para todos os campos; estados de gabarito ambíguo/incompatível; transcrição de texto dentro de figuras.
 - Comparação com a baseline v5 (não estava disponível).
+
+## Rodar em macOS / Windows (backend Docker)
+
+Pré-requisito: Docker em execução (Docker Desktop, Colima ou Podman com alias `docker`).
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate && pip install -e '.[dev]'
+extrator-enem sonda      # 1º teste: precisa imprimir tudo `true`; senão a extração é recusada
+extrator-enem extract PROVA.pdf --gabarito GAB.pdf --de 91 --ate 180 --dados dados/ensaio/2024
+```
+
+- A 1ª execução constrói a imagem `extrator-enem-worker:<hash>` (precisa de rede **só no build**; a execução usa `--network none`).
+- Escolha automática: `bwrap` se existir (Linux), senão `docker`. Forçar: `EXTRATOR_SANDBOX=docker` (ou `bwrap`).
+- No container: sem rede, raiz somente leitura, sem capabilities, usuário `65534`, `env -i`, limites de memória/CPU/processos/arquivos, tmpfs com teto. PDFs entram como mount somente leitura.
+- Verificado: no Linux, a mesma prova (2024) deu conteúdo idêntico em `bwrap` e `docker` (`compare`: nada alterado). macOS/Windows não foram testados.

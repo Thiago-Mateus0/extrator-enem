@@ -1,0 +1,6 @@
+.venv
+dados
+saida
+.git
+__pycache__
+*.egg-info

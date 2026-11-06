@@ -21,6 +21,6 @@ equações em alternativas (2025 Q159/Q164), símbolo vetorial (2024 Q104).
 - 2 casos de referência conhecidos passam sem alerta ou com leitura errada: 2024 Q142 (xfail) e setas da Q94 (xfail).
 - Heurísticas (fragmentação, seta ausente) podem dar falso alarme ou falso negativo; só conferência contra o PDF confirma.
 - Perfil só ENEM D2 caderno 5 (2024/2025) testado; faixa 91–180 é parâmetro.
-- Sandbox: **Linux + bwrap** declarado e testado. macOS/Windows/WSL não suportados — a ferramenta recusa (falha fechada).
+- Sandbox: **Linux+bwrap** e **Docker** (macOS/Windows/Linux) implementados; ambos com a mesma sonda. Testado de fato: Linux (bwrap e docker). **macOS/Windows com Docker Desktop: não testado por mim** — rodar `extrator-enem sonda` lá é o primeiro teste. Sem nenhum dos dois, a ferramenta recusa (falha fechada). Licença do Docker Desktop (empresas grandes) é decisão do responsável; Colima/Podman são alternativas livres.
 - Sem `bbox` por campo (só `regions` dos marcadores e `assets`/`snapshots`); proposta de manifesto de regiões pendente.
 - Referências textuais de recursos usam prefixo de 12 hex; colisão improvável mas não tratada.

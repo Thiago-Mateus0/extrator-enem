@@ -1,3 +1,4 @@
+import shutil
 import json
 import sys
 
@@ -93,3 +94,41 @@ def test_worker_travado_e_morto_no_prazo_sem_bloquear_o_host(tmp_path, monkeypat
     with pytest.raises(RuntimeError):
         sandbox.run_worker(tmp_path / "a.pdf", None, tmp_path / "o", 91, 180, {"timeout_s": 2})
     assert time.time() - t0 < 15
+
+
+# ---- backend docker (macOS/Windows/Linux) ----
+def test_escolha_do_backend(monkeypatch):
+    monkeypatch.setattr(sandbox.sys, "platform", "darwin")
+    monkeypatch.setattr(sandbox.shutil, "which", lambda n: "/x/" + n if n in ("bwrap", "docker") else None)
+    monkeypatch.delenv("EXTRATOR_SANDBOX", raising=False)
+    assert sandbox._backend() == "docker"  # bwrap só vale em Linux
+    monkeypatch.setattr(sandbox.sys, "platform", "linux")
+    assert sandbox._backend() == "bwrap"
+    monkeypatch.setenv("EXTRATOR_SANDBOX", "docker")
+    assert sandbox._backend() == "docker"
+    monkeypatch.setenv("EXTRATOR_SANDBOX", "qualquer")
+    with pytest.raises(sandbox.SandboxUnavailable, match="inválido"):
+        sandbox._backend()
+
+
+def test_sem_nenhum_backend_falha_fechada(monkeypatch):
+    monkeypatch.setattr(sandbox.shutil, "which", lambda _: None)
+    monkeypatch.delenv("EXTRATOR_SANDBOX", raising=False)
+    with pytest.raises(sandbox.SandboxUnavailable, match="Docker"):
+        sandbox._backend()
+
+
+def test_comando_docker_nega_o_essencial(monkeypatch):
+    monkeypatch.setattr(sandbox, "_garantir_imagem", lambda: "img:t")
+    cmd = sandbox._docker_cmd(["--probe"], {"/a/p.pdf": "/in/prova.pdf"}, sandbox.LIMITES, "n1")
+    j = " ".join(cmd)
+    for obrigatorio in ("--network none", "--read-only", "--cap-drop ALL", "no-new-privileges",
+                        "--user 65534:65534", "--pids-limit", "env -i"):
+        assert obrigatorio in j
+    assert "src=/a/p.pdf,dst=/in/prova.pdf,readonly" in j
+
+
+@pytest.mark.skipif(not shutil.which("docker"), reason="docker ausente")
+def test_sonda_docker_efetiva(monkeypatch):
+    monkeypatch.setenv("EXTRATOR_SANDBOX", "docker")
+    assert all(sandbox.sonda().values())

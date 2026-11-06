@@ -1,8 +1,13 @@
-"""Isolamento real do parser: bubblewrap (Linux) + rlimits. Falha fechada.
+"""Isolamento real do parser. Falha fechada. Dois backends, escolhidos pela disponibilidade:
 
-Backend declarado e testado: Linux com `bwrap`. macOS/Windows: NÃO suportados (recusa explícita).
-Rede negada, home inexistente, raiz do sistema somente leitura, ambiente sem credenciais,
-diretório temporário exclusivo, limites de CPU/memória/arquivo/descritores/tempo/volume de saída.
+- `bwrap`  (Linux com bubblewrap): namespaces + rlimits.
+- `docker` (macOS, Windows, Linux): container descartável, sem rede, raiz somente leitura,
+  sem capabilities, usuário sem privilégio, limites de memória/CPU/processos/arquivos.
+
+`EXTRATOR_SANDBOX=auto|bwrap|docker` força a escolha (padrão auto: bwrap se existir, senão docker).
+Em ambos: rede negada, home inexistente, ambiente sem credenciais, tmpfs exclusivo com teto de volume,
+e a MESMA sonda funcional + a mesma validação do tar de saída. Sem backend que prove o isolamento,
+a extração é recusada (nunca roda sem isolamento).
 """
 import hashlib
 import io
@@ -65,12 +70,76 @@ def _preexec(lim: dict):
     return f
 
 
+def _backend() -> str:
+    pref = os.environ.get("EXTRATOR_SANDBOX", "auto").lower()
+    if pref not in ("auto", "bwrap", "docker"):
+        raise SandboxUnavailable(f"EXTRATOR_SANDBOX inválido: {pref!r} (use auto, bwrap ou docker)")
+    if pref in ("auto", "bwrap") and sys.platform == "linux" and shutil.which("bwrap"):
+        return "bwrap"
+    if pref in ("auto", "docker") and shutil.which("docker"):
+        return "docker"
+    raise SandboxUnavailable(
+        "isolamento indisponível: precisa de Linux com bubblewrap (bwrap) OU de Docker "
+        "(macOS/Windows: instale Docker Desktop, Colima ou Podman-docker). "
+        "A extração foi recusada (falha fechada).")
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _imagem() -> str:
+    """Tag derivada do conteúdo (código + Dockerfile + lock): código novo => imagem nova."""
+    h = hashlib.sha256()
+    root = _repo_root()
+    arqs = [root / "docker" / "Dockerfile", root / "pyproject.toml", root / "requirements.lock"]
+    arqs += sorted((root / "src" / "extrator_enem").glob("*.py"))
+    for f in arqs:
+        if not f.is_file():
+            raise SandboxUnavailable(
+                f"backend docker precisa do repositório completo (falta {f.name}); "
+                "use uma instalação editável (`pip install -e .`) a partir do clone.")
+        h.update(f.name.encode() + b"\0" + f.read_bytes())
+    return f"extrator-enem-worker:{h.hexdigest()[:12]}"
+
+
+def _garantir_imagem() -> str:
+    tag = _imagem()
+    ok = subprocess.run(["docker", "image", "inspect", tag], capture_output=True, timeout=60).returncode == 0
+    if not ok:
+        r = subprocess.run(["docker", "build", "-q", "-t", tag, "-f", str(_repo_root() / "docker" / "Dockerfile"),
+                            str(_repo_root())], capture_output=True, text=True, timeout=1800)
+        if r.returncode != 0:
+            raise SandboxUnavailable(f"falha ao construir a imagem do worker (o build precisa de rede; "
+                                     f"a execução não): {r.stderr.strip()[-400:]}")
+    return tag
+
+
+def _docker_cmd(worker_args: list[str], ro: dict[str, str], lim: dict, nome: str) -> list[str]:
+    """ro: {caminho_no_host: caminho_no_container}. Container sem rede, raiz RO, sem capabilities."""
+    tmp_mb = max(lim["saida_max_bytes"] // 2**20, 1)
+    cmd = ["docker", "run", "--rm", "-i", "--name", nome, "--pull", "never",
+           "--network", "none", "--read-only", "--cap-drop", "ALL",
+           "--security-opt", "no-new-privileges", "--user", "65534:65534",
+           "--memory", str(lim["mem_bytes"]), "--memory-swap", str(lim["mem_bytes"]),
+           "--pids-limit", "128", "--cpus", "2",
+           "--ulimit", f"cpu={lim['cpu_s']}", "--ulimit", f"fsize={lim['fsize_bytes']}",
+           "--ulimit", f"nofile={lim['nofile']}",
+           "--tmpfs", f"/out:rw,noexec,nosuid,size={tmp_mb}m,mode=1777",
+           "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
+    for src, dst in ro.items():
+        cmd += ["--mount", f"type=bind,src={src},dst={dst},readonly"]
+    # `env -i`: ambiente limpo (a imagem base define variáveis como GPG_KEY; a sonda exige zero credenciais)
+    return cmd + [_garantir_imagem(), "env", "-i", "PATH=/usr/local/bin:/usr/bin:/bin", "HOME=/nonexistent",
+                  "PYTHONDONTWRITEBYTECODE=1", "python", "-I", "-m", "extrator_enem.worker", *worker_args]
+
+
 def _cmd(worker_args: list[str], ro: list[str], rw: list[str]) -> list[str]:
     bwrap = shutil.which("bwrap")
     if sys.platform != "linux" or not bwrap:
         raise SandboxUnavailable(
             "isolamento indisponível: requer Linux com bubblewrap (bwrap). "
-            "macOS/Windows não são suportados; a extração foi recusada (falha fechada).")
+            "A extração foi recusada (falha fechada).")
     py = os.path.realpath(sys.executable)
     cmd = [bwrap, "--unshare-all", "--die-with-parent", "--new-session", "--clearenv",
            "--setenv", "PATH", "/usr/bin:/bin", "--setenv", "HOME", "/nonexistent",
@@ -83,8 +152,15 @@ def _cmd(worker_args: list[str], ro: list[str], rw: list[str]) -> list[str]:
 
 def sonda() -> dict:
     """Prova funcional: rede negada, home inexistente, /usr somente leitura, sem credenciais."""
-    cmd = _cmd(["--probe"], [], [])
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=60, preexec_fn=_preexec(LIMITES))
+    backend = _backend()
+    if backend == "docker":
+        cmd, pre = _docker_cmd(["--probe"], {}, LIMITES, f"extrator-sonda-{os.getpid()}-{os.urandom(3).hex()}"), None
+    else:
+        cmd, pre = _cmd(["--probe"], [], []), _preexec(LIMITES)
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120, preexec_fn=pre)
+    except subprocess.TimeoutExpired as ex:
+        raise SandboxUnavailable("sonda do isolamento excedeu o tempo (o Docker está rodando?)") from ex
     if r.returncode != 0:
         raise SandboxUnavailable(f"sonda do isolamento falhou ao executar: {r.stderr.strip()[:300]}")
     res = json.loads(r.stdout)
@@ -133,17 +209,33 @@ def run_worker(pdf: Path, gabarito: Path | None, out: Path, de: int, ate: int, l
     gabarito = gabarito.resolve() if gabarito else None
     lim = {**LIMITES, **(limites or {})}
     sonda()  # nunca roda o parser sem provar o isolamento
-    args = ["--pdf", str(pdf), "--out", "/out", "--tar-stdout", "--de", str(de), "--ate", str(ate)]
-    ro = [str(pdf)]
-    if gabarito:
-        args += ["--gabarito", str(gabarito)]
-        ro.append(str(gabarito))
-    cmd = _cmd(args, ro, [])
-    # diretório de trabalho do worker: tmpfs com teto (disco do host não é tocado)
-    if "--proc" in cmd:
-        i = cmd.index("--proc")
-        cmd[i:i] = ["--size", str(lim["saida_max_bytes"]), "--tmpfs", "/out"]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=_preexec(lim))
+    backend = _backend()
+    nome = f"extrator-{os.getpid()}-{os.urandom(4).hex()}"
+    if backend == "docker":
+        # caminhos de dentro do container; o host só entrega os PDFs somente leitura
+        args = ["--pdf", "/in/prova.pdf", "--out", "/out", "--tar-stdout", "--de", str(de), "--ate", str(ate)]
+        ro_map = {str(pdf): "/in/prova.pdf"}
+        if gabarito:
+            args += ["--gabarito", "/in/gabarito.pdf"]
+            ro_map[str(gabarito)] = "/in/gabarito.pdf"
+        cmd, pre = _docker_cmd(args, ro_map, lim, nome), None
+    else:
+        args = ["--pdf", str(pdf), "--out", "/out", "--tar-stdout", "--de", str(de), "--ate", str(ate)]
+        ro = [str(pdf)]
+        if gabarito:
+            args += ["--gabarito", str(gabarito)]
+            ro.append(str(gabarito))
+        cmd, pre = _cmd(args, ro, []), _preexec(lim)
+        # diretório de trabalho do worker: tmpfs com teto (disco do host não é tocado)
+        if "--proc" in cmd:
+            i = cmd.index("--proc")
+            cmd[i:i] = ["--size", str(lim["saida_max_bytes"]), "--tmpfs", "/out"]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=pre)
+
+    def _matar():
+        proc.kill()
+        if backend == "docker":  # matar o cliente não mata o container
+            subprocess.run(["docker", "kill", nome], capture_output=True, timeout=30)
     err_buf = bytearray()
 
     def _drenar_stderr():
@@ -154,20 +246,20 @@ def run_worker(pdf: Path, gabarito: Path | None, out: Path, de: int, ate: int, l
 
     dreno = threading.Thread(target=_drenar_stderr, daemon=True)
     dreno.start()
-    prazo = threading.Timer(lim["timeout_s"], proc.kill)  # vale até o wait() terminar
+    prazo = threading.Timer(lim["timeout_s"], _matar)  # vale até o wait() terminar
     prazo.start()
     try:
         _receber(proc.stdout, lim["saida_max_bytes"], out)
         rc = proc.wait()
     except BaseException:
-        proc.kill()
+        _matar()
         proc.wait()
         raise
     finally:
         prazo.cancel()
         dreno.join(timeout=5)
     err = err_buf.decode(errors="replace")
-    if rc == -9 or rc == -signal.SIGKILL:
+    if rc in (-9, -signal.SIGKILL, 137):
         raise RuntimeError(f"worker isolado encerrado à força (tempo excedido de {lim['timeout_s']}s ou limite de recurso)")
     if rc != 0:
         raise RuntimeError(f"worker isolado falhou (código {rc}): {err.strip()[-400:]}")

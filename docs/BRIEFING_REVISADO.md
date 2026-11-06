@@ -15,7 +15,7 @@ não aprovar por IA, não declarar 100%).
 | 5 | **Decidir a licença do PyMuPDF (AGPL-3.0) agora, não no fim.** | É dependência obrigatória do caminho feliz. Se a distribuição pretendida não aceita AGPL, a escolha de parser muda a arquitetura, não só a dependência. |
 | 6 | **Trocar "estado do gabarito" por contrato mínimo já implementado** (`found/annulled/not_provided`; outro caderno/ano/dia é *recusado* na admissão) e deixar `ambíguo/incompatível` para quando houver caso real. | O PDF oficial diz "Anulado" literalmente, então anulado≠vazio é resolvível sem inventar estados. Estados sem caso real são contrato sem uso. |
 | 7 | **Exigir verificação do diagnóstico da Q94 antes de tratá-la como defeito de tabela.** | A leitura nativa preserva as vírgulas (9,5; 11,0; 7,7…); o que falta são as setas (vetores). O defeito de tabela registrado pode ser da v5, não do PDF — conferir contra a v5 antes de gastar esforço. |
-| 8 | **Sandbox: declarar só Linux+bwrap como suportado e deixar macOS fora do primeiro marco.** | Falha fechada já implementada e testada em Linux; macOS exigiria `sandbox-exec` com perfil próprio e testes — trabalho separado, sem ganho para o piloto. |
+| 8 | **Sandbox: Linux+bwrap e Docker (portável).** | Falha fechada nos dois. Docker cobre macOS/Windows sem `sandbox-exec`; testado em Linux, ainda não em macOS. |
 | 9 | **Critério de aceite 95/100 de revisão de código mantido, mas separado de métricas de fidelidade** (já dito no briefing; reforçar no relatório). | Evita o risco de a nota de código ser lida como acerto de extração. |
 
 ## 2. Marcos revisados
