@@ -21,6 +21,7 @@ import subprocess
 import sys
 import sysconfig
 import tarfile
+import tempfile
 import threading
 from pathlib import Path
 
@@ -128,6 +129,9 @@ def _docker_cmd(worker_args: list[str], ro: dict[str, str], lim: dict, nome: str
            "--tmpfs", f"/out:rw,noexec,nosuid,size={tmp_mb}m,mode=1777",
            "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m,mode=1777"]
     for src, dst in ro.items():
+        # --mount é lido como CSV: vírgula/aspas/'='/quebra de linha no caminho injetariam opções (ex.: tirar o readonly)
+        if re.search(r'[,"=\x00-\x1f]', src + dst):
+            raise SandboxUnavailable(f"caminho de mount inseguro para o docker: {src!r}")
         cmd += ["--mount", f"type=bind,src={src},dst={dst},readonly"]
     # `env -i`: ambiente limpo (a imagem base define variáveis como GPG_KEY; a sonda exige zero credenciais)
     return cmd + [_garantir_imagem(), "env", "-i", "PATH=/usr/local/bin:/usr/bin:/bin", "HOME=/nonexistent",
@@ -211,14 +215,21 @@ def run_worker(pdf: Path, gabarito: Path | None, out: Path, de: int, ate: int, l
     sonda()  # nunca roda o parser sem provar o isolamento
     backend = _backend()
     nome = f"extrator-{os.getpid()}-{os.urandom(4).hex()}"
+    entrada = None
     if backend == "docker":
         # caminhos de dentro do container; o host só entrega os PDFs somente leitura
         args = ["--pdf", "/in/prova.pdf", "--out", "/out", "--tar-stdout", "--de", str(de), "--ate", str(ate)]
-        ro_map = {str(pdf): "/in/prova.pdf"}
+        # o nome do arquivo do usuário nunca chega ao docker: cópia com nome fixo em diretório temporário próprio
+        entrada = Path(tempfile.mkdtemp(prefix="extrator-in-"))
+        shutil.copyfile(pdf, entrada / "prova.pdf")
+        args_gab = []
         if gabarito:
-            args += ["--gabarito", "/in/gabarito.pdf"]
-            ro_map[str(gabarito)] = "/in/gabarito.pdf"
-        cmd, pre = _docker_cmd(args, ro_map, lim, nome), None
+            shutil.copyfile(gabarito, entrada / "gabarito.pdf")
+            args_gab = ["--gabarito", "/in/gabarito.pdf"]
+        entrada.chmod(0o755)  # o container roda como 65534: precisa ler (o mount é somente leitura)
+        for f in entrada.iterdir():
+            f.chmod(0o644)
+        cmd, pre = _docker_cmd(args + args_gab, {str(entrada): "/in"}, lim, nome), None
     else:
         args = ["--pdf", str(pdf), "--out", "/out", "--tar-stdout", "--de", str(de), "--ate", str(ate)]
         ro = [str(pdf)]
@@ -258,6 +269,8 @@ def run_worker(pdf: Path, gabarito: Path | None, out: Path, de: int, ate: int, l
     finally:
         prazo.cancel()
         dreno.join(timeout=5)
+        if entrada is not None:
+            shutil.rmtree(entrada, ignore_errors=True)
     err = err_buf.decode(errors="replace")
     if rc in (-9, -signal.SIGKILL, 137):
         raise RuntimeError(f"worker isolado encerrado à força (tempo excedido de {lim['timeout_s']}s ou limite de recurso)")

@@ -132,3 +132,10 @@ def test_comando_docker_nega_o_essencial(monkeypatch):
 def test_sonda_docker_efetiva(monkeypatch):
     monkeypatch.setenv("EXTRATOR_SANDBOX", "docker")
     assert all(sandbox.sonda().values())
+
+
+def test_mount_docker_rejeita_caminho_com_virgula(monkeypatch):
+    monkeypatch.setattr(sandbox, "_garantir_imagem", lambda: "img:t")
+    for ruim in ("/a/p,readonly=false.pdf", '/a/"x.pdf', "/a/x=y.pdf", "/a/x\ny.pdf"):
+        with pytest.raises(sandbox.SandboxUnavailable, match="inseguro"):
+            sandbox._docker_cmd(["--probe"], {ruim: "/in/prova.pdf"}, sandbox.LIMITES, "n")
