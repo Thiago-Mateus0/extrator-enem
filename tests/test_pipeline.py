@@ -73,3 +73,9 @@ def test_renomear_pdf_nao_muda_identidade(tmp_path):
 def test_csv_protegido_contra_formula():
     assert pipeline._csv_safe("=SUM(A1)").startswith("'") and pipeline._csv_safe("@x").startswith("'")
     assert pipeline._csv_safe("normal") == "normal"
+
+
+def test_csv_quote_all_e_valores_do_worker_validados():
+    assert pipeline._CODE_OK.match("frac_reconstructed") and not pipeline._CODE_OK.match("=cmd|' /C calc'!A0")
+    assert not pipeline._HASH_OK.match("../../x")
+    assert pipeline._csv_safe("|x").startswith("'")

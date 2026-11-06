@@ -38,3 +38,44 @@ def test_parser_real_roda_no_sandbox_e_rejeita_pdf_invalido(tmp_path):
     bad.write_bytes(b"nao sou pdf")
     with pytest.raises(ValueError, match="assinatura de PDF"):
         Store(tmp_path / "d").quarantine(bad)
+
+
+def _tar_com(membros):
+    import io
+    import tarfile
+    b = io.BytesIO()
+    with tarfile.open(fileobj=b, mode="w:") as tf:
+        for nome, data, tipo in membros:
+            ti = tarfile.TarInfo(nome)
+            if tipo == "link":
+                ti.type, ti.linkname = tarfile.SYMTYPE, "/etc/passwd"
+            else:
+                ti.size = len(data)
+            tf.addfile(ti, io.BytesIO(data) if tipo != "link" else None)
+    b.seek(0)
+    return b
+
+
+def test_saida_do_worker_rejeita_symlink_e_nome_fora_da_lista(tmp_path):
+    with pytest.raises(RuntimeError, match="membro inválido"):
+        sandbox._receber(_tar_com([("assets/" + "a" * 64 + ".png", b"", "link")]), 10**6, tmp_path / "o1")
+    with pytest.raises(RuntimeError, match="membro inválido"):
+        sandbox._receber(_tar_com([("../../evil.json", b"{}", "file")]), 10**6, tmp_path / "o2")
+
+
+def test_saida_do_worker_rejeita_png_com_hash_divergente(tmp_path):
+    with pytest.raises(RuntimeError, match="hash divergente"):
+        sandbox._receber(_tar_com([("assets/" + "a" * 64 + ".png", b"png-falso", "file")]), 10**6, tmp_path / "o")
+
+
+def test_saida_do_worker_acima_do_teto_e_abortada_durante_a_leitura(tmp_path):
+    with pytest.raises(RuntimeError, match="acima do limite"):
+        sandbox._receber(_tar_com([("omitted.json", b"x" * 5000, "file")]), 1000, tmp_path / "o")
+
+
+def test_saida_valida_e_gravada_pelo_host(tmp_path):
+    import hashlib
+    png = b"\x89PNGfake"
+    h = hashlib.sha256(png).hexdigest()
+    sandbox._receber(_tar_com([("omitted.json", b"[]", "file"), (f"assets/{h}.png", png, "file")]), 10**6, tmp_path / "o")
+    assert (tmp_path / "o" / f"assets/{h}.png").read_bytes() == png

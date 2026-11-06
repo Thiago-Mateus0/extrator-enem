@@ -19,7 +19,22 @@ def content_hash(stem: str, choices: list[dict], tables: list, answer: dict) -> 
     return hashlib.sha256(json.dumps(canon, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
+import re
+
+_HASH = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _check_hashes(q: dict) -> None:
+    for a in q["assets"]:
+        if not _HASH.match(a["hash"]):
+            raise ValueError(f"hash de recurso inválido vindo do worker (questão {q['number']})")
+    for s in q["snapshots"]:
+        if not _HASH.match(s["hash"]):
+            raise ValueError(f"hash de snapshot inválido vindo do worker (questão {q['number']})")
+
+
 def build_record(q: dict, ans: dict, source_sha: str, gabarito_sha: str | None, source_label: str, run_id: str) -> dict:
+    _check_hashes(q)
     choices = []
     for letter in "ABCDE":
         if letter in q["choices"]:

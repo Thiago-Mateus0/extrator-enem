@@ -4,13 +4,18 @@ Backend declarado e testado: Linux com `bwrap`. macOS/Windows: NÃO suportados (
 Rede negada, home inexistente, raiz do sistema somente leitura, ambiente sem credenciais,
 diretório temporário exclusivo, limites de CPU/memória/arquivo/descritores/tempo/volume de saída.
 """
+import hashlib
+import io
 import json
 import os
+import re
 import resource
 import shutil
 import subprocess
 import sys
 import sysconfig
+import tarfile
+import threading
 from pathlib import Path
 
 
@@ -87,8 +92,35 @@ def sonda() -> dict:
     return res
 
 
-def _du(p: Path) -> int:
-    return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+_NOME_OK = re.compile(r"^(?:(?:questions|omitted|gabarito|identity)\.json|(?:assets|snapshots)/[0-9a-f]{64}\.png)$")
+
+
+def _receber(stream, teto: int, destino: Path) -> None:
+    """Lê o tar do worker com contagem corrente de bytes; só aceita arquivos regulares permitidos.
+
+    O worker é tratado como hostil: nada é extraído como o tar mandar (sem symlink, sem caminho livre);
+    PNGs são re-hasheados contra o nome. Estourar o teto mata o processo (feito pelo chamador).
+    """
+    buf = io.BytesIO()
+    while True:
+        chunk = stream.read(1 << 20)
+        if not chunk:
+            break
+        if buf.tell() + len(chunk) > teto:
+            raise RuntimeError("volume de saída do worker acima do limite")
+        buf.write(chunk)
+    buf.seek(0)
+    destino.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(fileobj=buf, mode="r:") as tf:
+        for m in tf:
+            if not m.isreg() or not _NOME_OK.match(m.name):
+                raise RuntimeError(f"saída do worker rejeitada (membro inválido): {m.name[:80]!r}")
+            data = tf.extractfile(m).read()
+            if m.name.endswith(".png") and hashlib.sha256(data).hexdigest() != Path(m.name).stem:
+                raise RuntimeError(f"recurso do worker com hash divergente: {m.name[:80]!r}")
+            dst = destino / m.name
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(data)
 
 
 def run_worker(pdf: Path, gabarito: Path | None, out: Path, de: int, ate: int, limites: dict | None = None) -> None:
@@ -96,18 +128,26 @@ def run_worker(pdf: Path, gabarito: Path | None, out: Path, de: int, ate: int, l
     gabarito = gabarito.resolve() if gabarito else None
     lim = {**LIMITES, **(limites or {})}
     sonda()  # nunca roda o parser sem provar o isolamento
-    out.mkdir(parents=True, exist_ok=True)
-    args = ["--pdf", str(pdf), "--out", str(out), "--de", str(de), "--ate", str(ate)]
+    args = ["--pdf", str(pdf), "--out", "/out", "--tar-stdout", "--de", str(de), "--ate", str(ate)]
     ro = [str(pdf)]
     if gabarito:
         args += ["--gabarito", str(gabarito)]
         ro.append(str(gabarito))
-    cmd = _cmd(args, ro, [str(out)])
+    cmd = _cmd(args, ro, [])
+    # diretório de trabalho do worker: tmpfs com teto (disco do host não é tocado)
+    i = cmd.index("--proc")
+    cmd[i:i] = ["--size", str(lim["saida_max_bytes"]), "--tmpfs", "/out"]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=_preexec(lim))
+    timer = threading.Timer(lim["timeout_s"], proc.kill)
+    timer.start()
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=lim["timeout_s"], preexec_fn=_preexec(lim))
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError(f"tempo excedido ({lim['timeout_s']}s) no worker isolado") from e
-    if r.returncode != 0:
-        raise RuntimeError(f"worker isolado falhou (código {r.returncode}): {r.stderr.strip()[-400:]}")
-    if _du(out) > lim["saida_max_bytes"]:
-        raise RuntimeError("volume de saída acima do limite")
+        _receber(proc.stdout, lim["saida_max_bytes"], out)
+    except Exception:
+        proc.kill()
+        raise
+    finally:
+        timer.cancel()
+        err = proc.stderr.read().decode(errors="replace")
+        rc = proc.wait()
+    if rc != 0:
+        raise RuntimeError(f"worker isolado falhou (código {rc}): {err.strip()[-400:]}")

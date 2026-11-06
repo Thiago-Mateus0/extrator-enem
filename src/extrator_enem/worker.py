@@ -8,6 +8,7 @@ import json
 import os
 import socket
 import sys
+import tarfile
 from dataclasses import asdict
 from pathlib import Path
 
@@ -65,6 +66,7 @@ def main() -> int:
     ap.add_argument("--out")
     ap.add_argument("--de", type=int)
     ap.add_argument("--ate", type=int)
+    ap.add_argument("--tar-stdout", action="store_true", help="devolve o diretório de saída como tar no stdout")
     ap.add_argument("--max-paginas", type=int, default=200)
     a = ap.parse_args()
     if a.probe:
@@ -86,6 +88,11 @@ def main() -> int:
              "paginas": len(doc)}
     for nome, obj in (("questions", qs), ("omitted", omitted), ("gabarito", gb), ("identity", ident)):
         (out / f"{nome}.json").write_text(json.dumps(obj, ensure_ascii=False))
+    if a.tar_stdout:
+        with tarfile.open(fileobj=sys.stdout.buffer, mode="w|") as tf:
+            for f in sorted(out.rglob("*")):
+                if f.is_file() and not f.is_symlink():
+                    tf.add(f, arcname=str(f.relative_to(out)), recursive=False)
     return 0
 
 

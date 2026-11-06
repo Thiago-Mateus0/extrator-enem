@@ -72,9 +72,13 @@ def validate(records: list[dict], de: int, ate: int, run: Path, gb: dict) -> lis
     return v
 
 
+_HASH_OK = re.compile(r"^[0-9a-f]{64}$")
+_CODE_OK = re.compile(r"^[a-z_]{1,40}$")
+
+
 def _csv_safe(x) -> str:
     s = str(x)
-    return "'" + s if s[:1] in "=+-@\t\r" else s  # proteção contra execução de fórmula em planilha
+    return "'" + s if s[:1] in "=+-@\t\r|" else s  # proteção contra execução de fórmula em planilha
 
 
 def extract(prova: str, gabarito: str | None, de: int, ate: int, dados: str, meta: dict | None = None) -> dict:
@@ -126,8 +130,10 @@ def _extract(prova, gabarito, de, ate, store, meta, holder) -> dict:
         (run / "questions" / f"{rec['question_id']}.json").write_text(json.dumps(rec, ensure_ascii=False, indent=1))
     (run / "assets").mkdir(exist_ok=True)
     (run / "snapshots").mkdir(exist_ok=True)
-    for sub in ("assets", "snapshots"):
+    for sub in ("assets", "snapshots"):  # já validados (arquivo regular, nome=hash, re-hash) em sandbox._receber
         for f in (scratch / sub).glob("*.png"):
+            if f.is_symlink() or not f.is_file():
+                raise RuntimeError(f"saída do worker rejeitada: {f.name}")
             f.replace(run / sub / f.name)
     (run / "omitted.json").write_text(json.dumps(omitted, ensure_ascii=False, indent=1))
     for f in scratch.iterdir():
@@ -165,14 +171,15 @@ def _extract(prova, gabarito, de, ate, store, meta, holder) -> dict:
     (run / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1))
     (run / "relatorio.md").write_text(_relatorio_md(report))
     buf = io.StringIO()
-    w = csv.writer(buf)
+    w = csv.writer(buf, quoting=csv.QUOTE_ALL)
     w.writerow(["numero", "question_id", "paginas", "alertas", "snapshots"])
     for r in records:
         if r["status"] == "needs_review":
+            cods = sorted({i["code"] for i in r["issues"] if i["severity"] != "info" and _CODE_OK.match(i["code"])})
+            snaps = [f"snapshots/{s['hash']}.png" for s in r["snapshots"] if _HASH_OK.match(s["hash"])]
             w.writerow([_csv_safe(x) for x in (r["number"], r["question_id"],
                         f"{r['location']['page_start']}-{r['location']['page_end']}",
-                        ";".join(sorted({i["code"] for i in r["issues"] if i["severity"] != "info"})),
-                        ";".join(f"snapshots/{s['hash']}.png" for s in r["snapshots"]))])
+                        " ".join(cods), " ".join(snaps))])
     (run / "conferencia.csv").write_text(buf.getvalue())
     store.publish(psha, run_id, label, {"estado": report["estado"], "gabarito_sha256": gsha})
     report["_run_dir"] = str(run)
