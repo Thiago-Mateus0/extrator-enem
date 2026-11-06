@@ -3,10 +3,9 @@ name = "extrator-enem"
 version = "0.0.1"
 description = "Extrator de provas do ENEM (prova + gabarito PDF -> questões estruturadas em JSON)"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["pymupdf>=1.24"]
 
 [project.optional-dependencies]
-pdf = ["pymupdf"]
 dev = ["pytest"]
 
 [project.scripts]

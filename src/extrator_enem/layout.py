@@ -23,6 +23,8 @@ class Line:
     y0: float
     x1: float
     y1: float
+    col: int = 0  # coluna de leitura (0 em páginas de coluna única)
+    fig: dict | None = None  # preenchido quando a "linha" é uma figura/recurso visual
 
 
 _EXEMPT = set("ºª°")
@@ -90,7 +92,8 @@ def _fractions(lines: list[Line], bars: list[tuple], mid: float) -> list[Line]:
         tn = " ".join(lines[i].text.strip() for i in sorted(num, key=lambda i: lines[i].x0))
         td = " ".join(lines[i].text.strip() for i in sorted(den, key=lambda i: lines[i].x0))
         page = lines[num[0]].page
-        fracs.append(Line(page, "\\frac{%s}{%s}" % (tn, td), bx0, by - 6, bx1, by + 6))
+        fracs.append(Line(page, "\\frac{%s}{%s}" % (tn, td), bx0, by - 6, bx1, by + 6,
+                          lines[num[0]].col))
     if not fracs:
         return lines
     rest = [(i, l) for i, l in enumerate(lines) if i not in consumed]
@@ -121,7 +124,8 @@ def _fractions(lines: list[Line], bars: list[tuple], mid: float) -> list[Line]:
     for r in rows:
         r.sort(key=lambda l: l.x0)
         merged = Line(r[0].page, " ".join(l.text.strip() for l in r),
-                      min(l.x0 for l in r), min(l.y0 for l in r), max(l.x1 for l in r), max(l.y1 for l in r))
+                      min(l.x0 for l in r), min(l.y0 for l in r), max(l.x1 for l in r), max(l.y1 for l in r),
+                      r[0].col)
         idx = min((i for i, l in rest if l in r), default=None)
         if idx is None:  # linha só de frações: posiciona pela primeira linha consumida acima
             idx = min((i for i in consumed if abs(_yc(lines[i]) - _yc(merged)) < 20), default=len(lines))
@@ -132,17 +136,58 @@ def _fractions(lines: list[Line], bars: list[tuple], mid: float) -> list[Line]:
     return [l for _, l in allx]
 
 
-def read_document(path: str) -> tuple[list[Line], list[dict], dict[int, list[tuple]]]:
-    """Linhas em ordem de leitura, registro de omissões e retângulos visuais por página."""
+def _figure_rects(page) -> list[tuple[float, float, float, float, str]]:
+    """Recursos visuais da página: rasters e agrupamentos de vetores (tabelas, gráficos, estruturas)."""
+    rects = []
+    for im in page.get_image_info():
+        x0, y0, x1, y1 = im["bbox"]
+        w, h = x1 - x0, y1 - y0
+        if min(w, h) < 2 or max(w, h) < 8 or y0 <= 60 or y1 >= 745:
+            continue
+        if (w > 150 and h < 8) or (h > 150 and w < 8):
+            continue  # filetes de separação entre questões/colunas
+        rects.append((x0, y0, x1, y1, "raster"))
+    for r in page.cluster_drawings():
+        w, h = r.width, r.height
+        if w < 12 or h < 8 or r.y0 < 60 or r.y1 > 745:
+            continue  # barras de fração, sublinhados, arrows finas e mobiliário não são figuras
+        if h < 14 and w > 200:
+            continue  # filete de seção
+        if any(x0 - 3 <= r.x0 and r.x1 <= x1 + 3 and y0 - 3 <= r.y0 and r.y1 <= y1 + 3
+               for x0, y0, x1, y1, _ in rects):
+            continue  # vetor sobreposto a um raster já contado
+        rects.append((r.x0, r.y0, r.x1, r.y1, "vector"))
+    return sorted(rects, key=lambda t: (t[1], t[0]))
+
+
+def _insert_figures(page, pno: int, lines: list[Line], mid: float, single: bool,
+                    dpi: int, assets: dict[str, bytes], furn_boxes: list[tuple]) -> list[Line]:
+    import hashlib
+    out = list(lines)
+    for x0, y0, x1, y1, kind in _figure_rects(page):
+        if any(x0 - 2 <= fx0 and fx1 <= x1 + 2 and y0 - 2 <= fy0 and fy1 <= y1 + 2
+               for fx0, fy0, fx1, fy1 in furn_boxes):
+            continue  # faixa de cabeçalho de área desenhada como figura: mobiliário
+        png = page.get_pixmap(clip=pymupdf.Rect(x0, y0, x1, y1), dpi=dpi).tobytes("png")
+        h = hashlib.sha256(png).hexdigest()
+        assets[h] = png
+        col = 0 if (single or (x0 + x1) / 2 < mid) else 1
+        fig = {"hash": h, "kind": kind, "page": pno, "bbox": [round(v, 1) for v in (x0, y0, x1, y1)]}
+        pos = next((i for i, l in enumerate(out) if l.col == col), len(out))
+        for i, l in enumerate(out):
+            if l.col == col and l.y0 < y0:
+                pos = i + 1
+        out.insert(pos, Line(pno, f"[[figura:{h[:12]}]]", x0, y0, x1, y1, col, fig))
+    return out
+
+
+def read_document(path: str, dpi: int = 200) -> tuple[list[Line], list[dict], dict[str, bytes]]:
+    """Linhas em ordem de leitura, registro de omissões e bytes PNG dos recursos visuais (por hash)."""
     doc = pymupdf.open(path)
     out: list[Line] = []
     omitted: list[dict] = []
-    visuals: dict[int, list[tuple]] = {}
+    assets: dict[str, bytes] = {}
     for pno, page in enumerate(doc, start=1):
-        rects = [tuple(i["bbox"]) for i in page.get_image_info()]
-        rects += [tuple(d["rect"]) for d in page.get_drawings()
-                  if d["rect"].width > 2 or d["rect"].height > 2]
-        visuals[pno] = rects
         mid = page.rect.width / 2
         blocks = [b for b in page.get_text("dict")["blocks"] if b["type"] == 0]
         def _content(b):
@@ -160,6 +205,7 @@ def read_document(path: str) -> tuple[list[Line], list[dict], dict[int, list[tup
         else:
             ordered = sorted(blocks, key=lambda b: (b["bbox"][1], b["bbox"][0]))
         page_start = len(out)
+        furn_boxes: list[tuple] = []
         for b in ordered:
             for ln in b["lines"]:
                 raw = _span_text(ln["spans"]).rstrip()
@@ -176,8 +222,10 @@ def read_document(path: str) -> tuple[list[Line], list[dict], dict[int, list[tup
                 why = _furniture_reason(raw, y0)
                 if why:
                     omitted.append({"page": pno, "reason": why, "text": raw.strip()[:60]})
+                    if why.startswith("cabecalho"):
+                        furn_boxes.append((x0, y0, x1, y1))
                     continue
-                out.append(Line(pno, raw, x0, y0, x1, y1))
+                out.append(Line(pno, raw, x0, y0, x1, y1, 0 if (single or x0 < mid) else 1))
         bars = []
         for d in page.get_drawings():
             for it in d["items"]:
@@ -190,4 +238,9 @@ def read_document(path: str) -> tuple[list[Line], list[dict], dict[int, list[tup
                 if 4 < x1 - x0 <= 140:
                     bars.append((x0, x1, y))
         out[page_start:] = _fractions(out[page_start:], bars, mid)
-    return out, omitted, visuals
+        if len(out) == page_start:
+            omitted.append({"page": pno, "reason": "pagina-sem-texto-de-questao",
+                            "text": "figuras da página não associadas a questões (capa/contracapa)"})
+        else:
+            out[page_start:] = _insert_figures(page, pno, out[page_start:], mid, single, dpi, assets, furn_boxes)
+    return out, omitted, assets

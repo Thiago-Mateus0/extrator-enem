@@ -20,29 +20,40 @@ python3 -m venv .venv && .venv/bin/pip install -e '.[pdf,dev]'
 Saída em `--saida`: `questions.json`, `report.json`, `relatorio.md`, `omitted.json`.
 Faixa de questões (`--de/--ate`) é parâmetro: a regra 91–135 / 136–180 é do perfil desses cadernos.
 
-## Resultado atual (leitura nativa, sem IA)
+## Resultado atual (leitura nativa, sem IA, parser em sandbox)
 
 | | 2024 | 2025 |
 |---|---|---|
 | Questões encontradas | 90/90 | 90/90 |
 | Para conferir (alertas) | 16 | 12 |
 | Gabarito: letra / anulada | 89 / 1 | 87 / 3 |
+| Tempo (extração completa) | ~8 s | ~8 s |
 
-Dos 16 defeitos com veredito humano do briefing, **14 são sinalizados** e 2 passam em silêncio
-(2024 Q142 número misto; 2025 Q129 deslocamento de gráficos) — ambos têm teste `xfail` estrito.
-Sinalizar **não é corrigir**: contagens de alerta não medem fidelidade.
+Dos 16 defeitos com veredito humano do briefing: o **deslocamento de gráficos da 2025 Q129 está corrigido**
+(cada gráfico ligado à sua letra, por geometria) e 14 são sinalizados; 2024 Q142 (número misto) e as setas da
+Q94 seguem sem recuperação (`xfail` estrito). Sinalizar **não é corrigir**; contagens não medem fidelidade.
 
-## Convenções do texto
+## Comandos
 
-- Sobrescrito `^{..}`, subscrito `_{..}`, fração `\frac{num}{den}` (LaTeX-like).
-- Fração é reconstruída pela geometria (barra + texto acima/abaixo): toda questão com `\frac`
-  recebe o alerta `frac_reconstructed` e **deve ser conferida contra a página**.
-- Alternativa só em figura: texto vazio + alerta informativo `choice_image_only`.
+```bash
+extrator-enem extract PROVA.pdf --gabarito GAB.pdf --de 91 --ate 180 --dados dados/ensaio/2024 [--ano --dia --caderno]
+extrator-enem sonda                 # prova funcional do isolamento
+extrator-enem compare RUN_A RUN_B   # baseline x candidato: corrigidos/mantidos/introduzidos/conteúdo alterado
+extrator-enem review --dados D --source SHA --numero 130 --verdict approved --by NOME   # humano; preso ao hash
+```
 
-## Estados do gabarito
+Códigos de saída: 0 ok · 1 erro · 2 extração INCOMPLETA · 3 isolamento indisponível (falha fechada) · 4 identidade da fonte.
 
-`found` (letra), `annulled` (PDF diz "Anulado"), `not_provided` (questão ausente no gabarito).
-Nunca se infere resposta resolvendo a questão.
+## Convenções, formato e identidade
+
+Ver `docs/FORMATO.md` (layout em disco, campos, hashes, gabarito, revisão) e
+`docs/DECISOES_PENDENTES.md` (decisões em aberto, licença AGPL do PyMuPDF, limites).
+
+- Sobrescrito `^{..}`, subscrito `_{..}`, fração `\frac{num}{den}`; toda fração reconstruída tem alerta `frac_reconstructed`.
+- Alternativa só em figura: texto vazio + `choice_image_only` (info) + `asset_ids` da figura da mesma altura do rótulo.
+- Gabarito: `found` / `annulled` / `not_provided`; outro caderno/ano/dia é recusado. Nunca se infere resposta.
+- Parser roda em `bwrap` (rede/home negados, raiz somente leitura, sem credenciais, rlimits CPU/mem/arquivo/tempo/volume);
+  se o isolamento ou a sonda falhar, **nada roda**.
 
 ## Alertas (`issues[].code`)
 
@@ -50,16 +61,14 @@ Nunca se infere resposta resolvendo a questão.
 |---|---|---|
 | `choices_not_found`, `empty_stem`, `empty_choice` | critical | estrutura não recuperada |
 | `fragmented_formula`, `broken_glyph`, `duplicate_choices`, `answer_without_choice` | critical | texto de fórmula/alternativa não confiável |
-| `frac_reconstructed`, `missing_reaction_arrow` | review | recuperação geométrica / seta de reação provavelmente ausente |
+| `frac_reconstructed`, `missing_reaction_arrow`, `asset_unassigned`, `answer_not_provided` | review | recuperação geométrica / possível perda / figura sem dono / sem gabarito |
 | `choice_image_only` | info | alternativa existe só como imagem/vetor |
 
 `status` = `needs_review` se houver alerta que não seja `info`; `extracted` **não** significa revisado.
 
-## Limites conhecidos (não implementado)
+## Ainda não implementado
 
-- Sem extração de figuras/recursos, manifesto de assets nem recortes (snapshots) — portanto o vínculo
-  figura↔alternativa (ex.: 2025 Q129) não é verificado.
-- Sem OCR/visão: fórmulas que o PDF não traz como texto/geometria (setas ⇌ vetoriais, números mistos
-  sem barra, fatoriais) ficam sinalizadas ou, nos 2 casos acima, silenciosas.
-- Sem sandbox/isolamento do parser, sem `source_id`/hash de revisão/reprocessamento imutável do briefing §7–9.
-- Heurísticas de detecção podem gerar falsos alarmes; só conferência contra o PDF confirma.
+- OCR/visão (adiado por decisão do responsável; ver `docs/DECISOES_PENDENTES.md`).
+- Tabelas estruturadas (células/colunas): tabelas saem como texto linear + recorte; `tables` é lista vazia.
+- Bbox para todos os campos; estados de gabarito ambíguo/incompatível; transcrição de texto dentro de figuras.
+- Comparação com a baseline v5 (não estava disponível).

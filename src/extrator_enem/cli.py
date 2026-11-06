@@ -1,93 +1,70 @@
 import argparse
-import dataclasses
-import hashlib
 import json
+import sys
 from pathlib import Path
 
-from .gabarito import read_gabarito
-from .layout import read_document
-from .segment import split_questions
+from .pipeline import IdentityError, compare, extract
+from .records import question_id
+from .sandbox import SandboxUnavailable, sonda
+from .store import Store
 
 
-def sha256(path: str) -> str:
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def _resumo(r: dict) -> str:
+    return json.dumps({k: r[k] for k in ("run_id", "estado", "esperadas", "encontradas", "gabarito", "status",
+                                         "por_codigo", "tempo_s", "_run_dir")}, ensure_ascii=False, indent=1)
 
 
-def extract(prova: str, gabarito: str | None, de: int, ate: int, saida: str) -> dict:
-    lines, omitted, visuals = read_document(prova)
-    qs = split_questions(lines, de, ate, visuals)
-    gb = read_gabarito(gabarito) if gabarito else {}
-    out = Path(saida)
-    out.mkdir(parents=True, exist_ok=True)
-    records, nums = [], [q.number for q in qs]
-    for q in qs:
-        ans = gb.get(q.number, {"state": "not_provided", "letter": None})
-        issues = list(q.issues)
-        image_only = {i["message"].split()[1] for i in q.issues if i["code"] == "choice_image_only"}
-        if ans["state"] == "found" and not q.choices.get(ans["letter"]) and ans["letter"] not in image_only:
-            issues.append({"code": "answer_without_choice", "severity": "critical",
-                           "message": f"gabarito {ans['letter']} sem alternativa correspondente"})
-        records.append({**dataclasses.asdict(q), "issues": issues, "answer": ans,
-                        "status": "needs_review" if any(i["severity"] != "info" for i in issues) else "extracted"})
-    esperado = set(range(de, ate + 1))
-    report = {
-        "prova_sha256": sha256(prova),
-        "gabarito_sha256": sha256(gabarito) if gabarito else None,
-        "esperadas": len(esperado), "encontradas": len(set(nums)),
-        "ausentes": sorted(esperado - set(nums)),
-        "duplicadas": sorted({n for n in nums if nums.count(n) > 1}),
-        "com_problema": sum(1 for r in records if r["status"] == "needs_review"),
-        "gabarito": {s: sum(1 for r in records if r["answer"]["state"] == s)
-                     for s in ("found", "annulled", "not_provided")},
-        "omitidos": len(omitted),
-    }
-    report["por_codigo"] = {}
-    for r in records:
-        for i in r["issues"]:
-            report["por_codigo"][i["code"]] = report["por_codigo"].get(i["code"], 0) + 1
-    report["questoes_para_conferir"] = {
-        r["number"]: sorted({i["code"] for i in r["issues"] if i["severity"] != "info"})
-        for r in records if r["status"] == "needs_review"}
-    (out / "relatorio.md").write_text(_relatorio_md(report))
-    (out / "questions.json").write_text(json.dumps(records, ensure_ascii=False, indent=1))
-    (out / "omitted.json").write_text(json.dumps(omitted, ensure_ascii=False, indent=1))
-    (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1))
-    return report
-
-
-def _relatorio_md(r: dict) -> str:
-    g = r["gabarito"]
-    linhas = [
-        "# Relatório de extração", "",
-        f"- Prova SHA-256: `{r['prova_sha256']}`",
-        f"- Gabarito SHA-256: `{r['gabarito_sha256']}`",
-        f"- Questões: {r['encontradas']}/{r['esperadas']} encontradas; ausentes: {r['ausentes'] or 'nenhuma'}; duplicadas: {r['duplicadas'] or 'nenhuma'}",
-        f"- Gabarito: {g['found']} com letra, {g['annulled']} anuladas, {g['not_provided']} sem gabarito",
-        f"- Linhas de mobiliário/marca d'água removidas (ver omitted.json): {r['omitidos']}",
-        f"- **Questões para conferir: {r['com_problema']}** de {r['encontradas']}", "",
-        "> Estas contagens medem *alertas automáticos*, não fidelidade. Questão sem alerta não está certificada;",
-        "> `frac_reconstructed` é reconstrução geométrica e precisa ser conferida contra a página.", "",
-        "## Alertas por código", "", "| código | ocorrências |", "|---|---|",
-    ]
-    linhas += [f"| {c} | {n} |" for c, n in sorted(r["por_codigo"].items())]
-    linhas += ["", "## Questões para conferir", "", "| questão | alertas |", "|---|---|"]
-    linhas += [f"| {n} | {', '.join(c)} |" for n, c in r["questoes_para_conferir"].items()]
-    return "\n".join(linhas) + "\n"
-
-
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="extrator-enem")
     sub = p.add_subparsers(dest="cmd", required=True)
-    e = sub.add_parser("extract", help="extrai questões de prova + gabarito")
+    e = sub.add_parser("extract", help="extrai questões de prova + gabarito (parser em sandbox)")
     e.add_argument("prova")
     e.add_argument("--gabarito")
     e.add_argument("--de", type=int, required=True)
     e.add_argument("--ate", type=int, required=True)
-    e.add_argument("--saida", required=True)
-    a = p.parse_args()
-    if a.cmd == "extract":
-        print(json.dumps(extract(a.prova, a.gabarito, a.de, a.ate, a.saida), ensure_ascii=False, indent=1))
+    e.add_argument("--dados", required=True, help="raiz de dados (quarentena/ e saida/)")
+    e.add_argument("--ano")
+    e.add_argument("--dia")
+    e.add_argument("--caderno")
+    sub.add_parser("sonda", help="prova funcional do isolamento (rede/home/escrita negadas)")
+    c = sub.add_parser("compare", help="compara duas execuções (baseline x candidato)")
+    c.add_argument("run_a")
+    c.add_argument("run_b")
+    r = sub.add_parser("review", help="registra veredito HUMANO preso ao hash do conteúdo atual")
+    r.add_argument("--dados", required=True)
+    r.add_argument("--source", required=True, help="source_id (SHA-256 completo da prova)")
+    r.add_argument("--numero", type=int, required=True)
+    r.add_argument("--verdict", choices=["approved", "rejected", "doubt"], required=True)
+    r.add_argument("--by", required=True)
+    r.add_argument("--note", default="")
+    a = p.parse_args(argv)
+    try:
+        if a.cmd == "sonda":
+            print(json.dumps(sonda(), indent=1))
+        elif a.cmd == "extract":
+            rep = extract(a.prova, a.gabarito, a.de, a.ate, a.dados,
+                          {k: v for k, v in (("ano", a.ano), ("dia", a.dia), ("caderno", a.caderno)) if v})
+            print(_resumo(rep))
+            return 0 if rep["estado"] == "completo" else 2
+        elif a.cmd == "compare":
+            print(json.dumps(compare(a.run_a, a.run_b), ensure_ascii=False, indent=1))
+        elif a.cmd == "review":
+            st = Store(a.dados)
+            cur = json.loads((st.source_dir(a.source) / "current.json").read_text())["run_id"]
+            f = st.source_dir(a.source) / "runs" / cur / "questions" / f"{question_id(a.source, a.numero)}.json"
+            rec = json.loads(f.read_text())
+            print(st.save_review(rec["question_id"], rec["content_sha256"], a.verdict, a.by, a.note))
+    except SandboxUnavailable as ex:
+        print(f"ERRO (falha fechada): {ex}", file=sys.stderr)
+        return 3
+    except IdentityError as ex:
+        print(f"ERRO de identidade da fonte: {ex}", file=sys.stderr)
+        return 4
+    except (ValueError, RuntimeError, FileNotFoundError) as ex:
+        print(f"ERRO: {ex}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

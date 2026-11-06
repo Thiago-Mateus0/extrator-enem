@@ -11,13 +11,12 @@ P = Path(__file__).resolve().parents[1] / "dados" / "provas"
 
 
 def _load(year):
-    pv = P / f"{year}_PV_impresso_D2_CD5.pdf"
-    gb = P / f"{year}_GB_impresso_D2_CD5.pdf"
+    pv, gb = P / f"{year}_PV_impresso_D2_CD5.pdf", P / f"{year}_GB_impresso_D2_CD5.pdf"
     if not pv.exists() or not gb.exists():
         pytest.skip("PDFs de referência ausentes em dados/provas")
-    lines, omitted, vis = read_document(str(pv))
-    qs = {q.number: q for q in split_questions(lines, 91, 180, vis)}
-    return qs, read_gabarito(str(gb)), omitted
+    lines, omitted, assets = read_document(str(pv))
+    qs = {q.number: q for q in split_questions(lines, 91, 180)}
+    return qs, read_gabarito(str(gb)), omitted, assets
 
 
 @pytest.fixture(scope="module")
@@ -34,9 +33,13 @@ def codes(q):
     return {i["code"] for i in q.issues}
 
 
+ALERTAS = {"fragmented_formula", "broken_glyph", "frac_reconstructed", "missing_reaction_arrow",
+           "duplicate_choices", "empty_stem", "choices_not_found", "asset_unassigned"}
+
+
 @pytest.mark.parametrize("fx", ["y24", "y25"])
 def test_cobertura_90_questoes_sem_duplicatas(fx, request):
-    qs, gb, _ = request.getfixturevalue(fx)
+    qs, gb, *_ = request.getfixturevalue(fx)
     assert sorted(qs) == list(range(91, 181))
     assert len(gb) == 90
 
@@ -50,14 +53,31 @@ def test_gabarito_distingue_anulado_de_letra(y24, y25):
 
 def test_controle_texto_simples_q130(y24):
     q = y24[0][130]
-    assert not q.issues
-    assert set(q.choices) == set("ABCDE") and all(q.choices.values())
+    assert not q.issues and set(q.choices) == set("ABCDE") and all(q.choices.values())
 
 
-def test_controle_figuras_q106_alternativas_so_imagem(y24):
+def test_controle_figuras_q106_cada_alternativa_com_sua_imagem(y24):
     q = y24[0][106]
     assert "empty_choice" not in codes(q) and "choice_image_only" in codes(q)
-    assert not any("ENEM" in t for t in q.choices.values())  # marca d'água fora do texto
+    assert {a["letter"] for a in q.assets if a["role"] == "choice"} == set("ABCDE")
+    assert any(a["role"] == "stem" for a in q.assets)  # a figura do enunciado continua ligada
+    assert not any("ENEM" in t for t in q.choices.values())
+
+
+def test_controle_figura_q91_no_enunciado(y24):
+    q = y24[0][91]
+    assert any(a["role"] == "stem" for a in q.assets) and "[[figura:" in q.stem
+
+
+def test_q129_2025_graficos_ligados_a_letra_correta(y25):
+    """Defeito do briefing: A do PDF no enunciado, A–D ligados a B–E, E vazia."""
+    q = y25[0][129]
+    por_letra = {a["letter"]: a for a in q.assets if a["role"] == "choice"}
+    assert set(por_letra) == set("ABCDE")
+    ys = [por_letra[l]["bbox"][1] for l in "ABCDE"]
+    assert ys == sorted(ys) and len(set(ys)) == 5  # um gráfico distinto por letra, em ordem vertical
+    assert not any(a["role"] == "stem" for a in q.assets)  # nenhum gráfico de alternativa no enunciado
+    assert "[[figura:" not in q.stem
 
 
 def test_tabela_q94_preserva_decimais_e_alternativas(y24):
@@ -67,13 +87,9 @@ def test_tabela_q94_preserva_decimais_e_alternativas(y24):
     assert [q.choices[k] for k in "ABCDE"] == ["I", "II", "III", "IV", "V"]
 
 
-@pytest.mark.xfail(strict=True, reason="setas de equilíbrio são vetores sem texto; ainda não recuperadas")
+@pytest.mark.xfail(strict=True, reason="setas de equilíbrio são vetores finos sem texto; ainda não recuperadas")
 def test_q94_seta_de_equilibrio_preservada(y24):
     assert "⇌" in y24[0][94].stem
-
-
-ALERTAS = {"fragmented_formula", "broken_glyph", "frac_reconstructed", "missing_reaction_arrow",
-           "duplicate_choices", "empty_stem", "choices_not_found"}
 
 
 @pytest.mark.parametrize("n", [94, 139, 141, 149, 150, 151, 158, 179])
@@ -91,11 +107,6 @@ def test_q142_numero_misto_sinalizado(y24):
     assert codes(y24[0][142]) & ALERTAS
 
 
-@pytest.mark.xfail(strict=True, reason="deslocamento figura/alternativa (Q129) exige extração de recursos; não implementada")
-def test_q129_2025_deslocamento_de_graficos_sinalizado(y25):
-    assert codes(y25[0][129]) & ALERTAS
-
-
 def test_expoentes_e_subscritos_recuperados(y24, y25):
     assert y24[0][169].choices["B"] == "3 × 2^{20}"
     assert "M_{1}" in y24[0][150].stem
@@ -108,10 +119,9 @@ def test_fracoes_reconstruidas_q149_alternativa_a(y24):
 
 
 def test_fracao_reconstruida_nunca_passa_limpa(y24, y25):
-    for qs, _, _ in (y24, y25):
+    for qs, *_ in (y24, y25):
         for q in qs.values():
-            texto = q.stem + "".join(q.choices.values())
-            if "\\frac{" in texto:
+            if "\\frac{" in q.stem + "".join(q.choices.values()):
                 assert "frac_reconstructed" in codes(q)
 
 
@@ -120,7 +130,13 @@ def test_alternativas_em_grade_de_figuras_q144_2025(y25):
     assert set(q.regions) == set("ABCDE") and "choices_not_found" not in codes(q)
 
 
+def test_nenhuma_figura_sem_dono_nem_contracapa(y24, y25):
+    for qs, _, omitted, _ in (y24, y25):
+        assert not any(i["code"] == "asset_unassigned" for q in qs.values() for i in q.issues)
+        assert any(o["reason"] == "pagina-sem-texto-de-questao" for o in omitted)
+
+
 def test_marca_dagua_removida_com_registro(y24, y25):
-    for qs, _, omitted in (y24, y25):
+    for qs, _, omitted, _ in (y24, y25):
         assert not any("ENEM" in q.stem or any("ENEM" in c for c in q.choices.values()) for q in qs.values())
         assert any(o["reason"] == "marca-dagua" for o in omitted)
