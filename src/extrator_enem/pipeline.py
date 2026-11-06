@@ -161,6 +161,7 @@ def _extract(prova, gabarito, de, ate, store, meta, holder) -> dict:
         "questoes_para_conferir": {r["number"]: sorted({i["code"] for i in r["issues"] if i["severity"] != "info"})
                                    for r in records if r["status"] == "needs_review"},
         "recursos_sem_transcricao_textual": sem_texto,
+        "tabelas_estruturadas": {r["number"]: len(r["tables"]) for r in records if r["tables"]},
         "revisoes_obsoletas": stale,
         "omitidos": len(omitted),
         "validacoes": validacoes,
@@ -196,6 +197,7 @@ def _relatorio_md(r: dict) -> str:
          f"- Para conferir (alertas): **{s['needs_review']}** de {r['encontradas']}; sem alerta: {s['extracted']} "
          "(*sem alerta ≠ certificada*)",
          f"- Recursos sem transcrição textual (só imagem): questões {r['recursos_sem_transcricao_textual']}",
+         f"- Tabelas estruturadas (cabeçalho = 1ª linha, *inferido*): {sum(r["tabelas_estruturadas"].values())} em questões {sorted(r['tabelas_estruturadas'])}",
          f"- Revisões humanas obsoletas por mudança de conteúdo: {r['revisoes_obsoletas'] or 'nenhuma'}",
          f"- Mobiliário/marca d'água removidos (ver omitted.json): {r['omitidos']}",
          f"- Método: {r['metodo']['extrator']}; OCR/visão: {r['metodo']['ocr_visao']}; isolamento: {r['metodo']['isolamento']}; "

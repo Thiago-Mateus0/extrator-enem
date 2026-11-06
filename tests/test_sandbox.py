@@ -79,3 +79,17 @@ def test_saida_valida_e_gravada_pelo_host(tmp_path):
     h = hashlib.sha256(png).hexdigest()
     sandbox._receber(_tar_com([("omitted.json", b"[]", "file"), (f"assets/{h}.png", png, "file")]), 10**6, tmp_path / "o")
     assert (tmp_path / "o" / f"assets/{h}.png").read_bytes() == png
+
+
+@linux_bwrap
+def test_worker_travado_e_morto_no_prazo_sem_bloquear_o_host(tmp_path, monkeypatch):
+    """Worker que nunca termina e despeja stderr: o host precisa abortar no prazo, não ficar preso."""
+    import time
+    monkeypatch.setattr(sandbox, "sonda", lambda: {})
+    monkeypatch.setattr(sandbox, "_cmd", lambda *a, **k: [
+        sys.executable, "-c",
+        "import sys,time\nwhile True:\n    sys.stderr.write('x'*65536); sys.stderr.flush(); time.sleep(0.01)"])
+    t0 = time.time()
+    with pytest.raises(RuntimeError):
+        sandbox.run_worker(tmp_path / "a.pdf", None, tmp_path / "o", 91, 180, {"timeout_s": 2})
+    assert time.time() - t0 < 15

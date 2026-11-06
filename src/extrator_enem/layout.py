@@ -136,8 +136,34 @@ def _fractions(lines: list[Line], bars: list[tuple], mid: float) -> list[Line]:
     return [l for _, l in allx]
 
 
-def _figure_rects(page) -> list[tuple[float, float, float, float, str]]:
-    """Recursos visuais da página: rasters e agrupamentos de vetores (tabelas, gráficos, estruturas)."""
+def _tables(page) -> list[dict]:
+    """Tabelas com linhas desenhadas: a *estrutura* (células) vem do PDF; o *texto* de cada célula é lido
+    por recorte (get_text clip), porque o texto de `Table.extract()` perde espaços e vírgulas decimais."""
+    out = []
+    try:
+        found = page.find_tables().tables
+    except Exception:  # detecção é auxiliar: falha vira "sem tabela", nunca derruba a extração
+        return out
+    for t in found:
+        if t.row_count < 2 or t.col_count < 2 or t.bbox[1] < 60 or t.bbox[3] > 745:
+            continue
+        rows = [[" ".join(page.get_text("text", clip=pymupdf.Rect(c)).split()) if c else "" for c in r.cells]
+                for r in t.rows]
+        if not any(any(c for c in r) for r in rows):
+            continue
+        out.append({"bbox": tuple(t.bbox), "rows": rows})
+    return out
+
+
+def _overlap(a, b) -> float:
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    area = (a[2] - a[0]) * (a[3] - a[1])
+    return (ix * iy) / area if area else 0.0
+
+
+def _figure_rects(page, tables: list[dict] = ()) -> list[tuple[float, float, float, float, str]]:
+    """Recursos visuais da página: rasters e agrupamentos de vetores (gráficos, estruturas)."""
     rects = []
     for im in page.get_image_info():
         x0, y0, x1, y1 = im["bbox"]
@@ -156,15 +182,20 @@ def _figure_rects(page) -> list[tuple[float, float, float, float, str]]:
         if any(x0 - 3 <= r.x0 and r.x1 <= x1 + 3 and y0 - 3 <= r.y0 and r.y1 <= y1 + 3
                for x0, y0, x1, y1, _ in rects):
             continue  # vetor sobreposto a um raster já contado
+        if any(_overlap((r.x0, r.y0, r.x1, r.y1), t["bbox"]) > 0.7 for t in tables):
+            continue  # a tabela já vira recurso próprio (kind "table")
         rects.append((r.x0, r.y0, r.x1, r.y1, "vector"))
     return sorted(rects, key=lambda t: (t[1], t[0]))
 
 
 def _insert_figures(page, pno: int, lines: list[Line], mid: float, single: bool,
-                    dpi: int, assets: dict[str, bytes], furn_boxes: list[tuple]) -> list[Line]:
+                    dpi: int, assets: dict[str, bytes], furn_boxes: list[tuple],
+                    tables: list[dict] = ()) -> list[Line]:
     import hashlib
     out = list(lines)
-    for x0, y0, x1, y1, kind in _figure_rects(page):
+    items = [(*t["bbox"], "table", t) for t in tables]
+    items += [(*r, None) for r in _figure_rects(page, tables)]
+    for x0, y0, x1, y1, kind, tab in sorted(items, key=lambda t: (t[1], t[0])):
         if any(x0 - 2 <= fx0 and fx1 <= x1 + 2 and y0 - 2 <= fy0 and fy1 <= y1 + 2
                for fx0, fy0, fx1, fy1 in furn_boxes):
             continue  # faixa de cabeçalho de área desenhada como figura: mobiliário
@@ -173,11 +204,16 @@ def _insert_figures(page, pno: int, lines: list[Line], mid: float, single: bool,
         assets[h] = png
         col = 0 if (single or (x0 + x1) / 2 < mid) else 1
         fig = {"hash": h, "kind": kind, "page": pno, "bbox": [round(v, 1) for v in (x0, y0, x1, y1)]}
+        if tab is not None:
+            fig["table"] = {"asset_id": h, "page": pno, "bbox": fig["bbox"], "n_rows": len(tab["rows"]),
+                            "n_cols": len(tab["rows"][0]), "rows": tab["rows"], "header_row": 0,
+                            "header_inferred": True, "method": "pymupdf.find_tables(estrutura)+texto por célula"}
         pos = next((i for i, l in enumerate(out) if l.col == col), len(out))
         for i, l in enumerate(out):
             if l.col == col and l.y0 < y0:
                 pos = i + 1
-        out.insert(pos, Line(pno, f"[[figura:{h[:12]}]]", x0, y0, x1, y1, col, fig))
+        ref = "tabela" if kind == "table" else "figura"
+        out.insert(pos, Line(pno, f"[[{ref}:{h[:12]}]]", x0, y0, x1, y1, col, fig))
     return out
 
 
@@ -238,9 +274,17 @@ def read_document(path: str, dpi: int = 200) -> tuple[list[Line], list[dict], di
                 if 4 < x1 - x0 <= 140:
                     bars.append((x0, x1, y))
         out[page_start:] = _fractions(out[page_start:], bars, mid)
-        if len(out) == page_start:
+        tables = _tables(page)
+        if tables:
+            keep = []
+            for l in out[page_start:]:
+                cx, cy = (l.x0 + l.x1) / 2, (l.y0 + l.y1) / 2
+                if not any(t["bbox"][0] <= cx <= t["bbox"][2] and t["bbox"][1] <= cy <= t["bbox"][3] for t in tables):
+                    keep.append(l)
+            out[page_start:] = keep
+        if len(out) == page_start and not tables:
             omitted.append({"page": pno, "reason": "pagina-sem-texto-de-questao",
                             "text": "figuras da página não associadas a questões (capa/contracapa)"})
         else:
-            out[page_start:] = _insert_figures(page, pno, out[page_start:], mid, single, dpi, assets, furn_boxes)
+            out[page_start:] = _insert_figures(page, pno, out[page_start:], mid, single, dpi, assets, furn_boxes, tables)
     return out, omitted, assets

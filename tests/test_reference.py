@@ -80,11 +80,37 @@ def test_q129_2025_graficos_ligados_a_letra_correta(y25):
     assert "[[figura:" not in q.stem
 
 
-def test_tabela_q94_preserva_decimais_e_alternativas(y24):
+def _tabelas(q):
+    return [x["table"] for x in q.assets if "table" in x]
+
+
+def test_tabela_q94_estruturada_com_decimais_e_sem_texto_duplicado_no_enunciado(y24):
     q = y24[0][94]
-    for v in ("9,5", "11,0", "7,7", "6,9", "7,3"):
-        assert v in q.stem
+    (t,) = _tabelas(q)
+    assert t["rows"][0] == ["Creme dental", "Agente de polimento", "pH"]
+    assert [r[2] for r in t["rows"][1:]] == ["9,5", "11,0", "7,7", "6,9", "7,3"]  # vírgulas decimais preservadas
+    assert [r[0] for r in t["rows"][1:]] == ["I", "II", "III", "IV", "V"]
+    assert t["rows"][1][1] == "Bicarbonato de sódio" and t["header_inferred"] is True
+    assert "[[tabela:" in q.stem and "Bicarbonato" not in q.stem  # o conteúdo mora na estrutura, não duplicado
     assert [q.choices[k] for k in "ABCDE"] == ["I", "II", "III", "IV", "V"]
+
+
+def test_tabela_2025_q131_estruturada(y25):
+    (t,) = _tabelas(y25[0][131])
+    assert t["rows"][0] == ["Teste", "Resultado"] and len(t["rows"]) == 6
+    assert t["rows"][1] == ["Aedes aegypti (larvas)", "Baixa eficiência"]
+
+
+def test_tabelas_nos_dois_cadernos_tem_recorte_original(y24, y25):
+    n = 0
+    for qs, _, _, assets in (y24, y25):
+        for q in qs.values():
+            for a in q.assets:
+                if "table" in a:
+                    n += 1
+                    assert a["kind"] == "table" and a["hash"] in assets  # recorte para comparação
+                    assert all(len(r) == a["table"]["n_cols"] for r in a["table"]["rows"])
+    assert n >= 12
 
 
 @pytest.mark.xfail(strict=True, reason="setas de equilíbrio são vetores finos sem texto; ainda não recuperadas")

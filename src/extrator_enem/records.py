@@ -53,7 +53,7 @@ def build_record(q: dict, ans: dict, source_sha: str, gabarito_sha: str | None, 
     elif ans["state"] == "not_provided":
         issues.append({"code": "answer_not_provided", "severity": "review",
                        "message": "questão ausente no gabarito do mesmo caderno (não é anulação)"})
-    tables: list = []
+    tables = [a["table"] for a in q["assets"] if "table" in a]
     assets = [{"asset_id": a["hash"], "hash": a["hash"], "kind": a["kind"], "page": a["page"], "bbox": a["bbox"],
                "role": a["role"], **({"letter": a["letter"]} if "letter" in a else {})} for a in q["assets"]]
     chash = content_hash(q["stem"], choices, tables, answer)

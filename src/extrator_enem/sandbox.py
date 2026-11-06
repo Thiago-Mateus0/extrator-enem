@@ -11,6 +11,7 @@ import os
 import re
 import resource
 import shutil
+import signal
 import subprocess
 import sys
 import sysconfig
@@ -111,7 +112,11 @@ def _receber(stream, teto: int, destino: Path) -> None:
         buf.write(chunk)
     buf.seek(0)
     destino.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(fileobj=buf, mode="r:") as tf:
+    try:
+        tf_ctx = tarfile.open(fileobj=buf, mode="r:")
+    except tarfile.TarError as ex:
+        raise RuntimeError(f"saída do worker inválida (tar ilegível ou vazio): {ex}") from ex
+    with tf_ctx as tf:
         for m in tf:
             if not m.isreg() or not _NOME_OK.match(m.name):
                 raise RuntimeError(f"saída do worker rejeitada (membro inválido): {m.name[:80]!r}")
@@ -135,19 +140,34 @@ def run_worker(pdf: Path, gabarito: Path | None, out: Path, de: int, ate: int, l
         ro.append(str(gabarito))
     cmd = _cmd(args, ro, [])
     # diretório de trabalho do worker: tmpfs com teto (disco do host não é tocado)
-    i = cmd.index("--proc")
-    cmd[i:i] = ["--size", str(lim["saida_max_bytes"]), "--tmpfs", "/out"]
+    if "--proc" in cmd:
+        i = cmd.index("--proc")
+        cmd[i:i] = ["--size", str(lim["saida_max_bytes"]), "--tmpfs", "/out"]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=_preexec(lim))
-    timer = threading.Timer(lim["timeout_s"], proc.kill)
-    timer.start()
+    err_buf = bytearray()
+
+    def _drenar_stderr():
+        # esvazia o pipe enquanto o worker roda (evita deadlock) e guarda só os primeiros 64 KiB
+        for chunk in iter(lambda: proc.stderr.read(8192), b""):
+            if len(err_buf) < 64 * 1024:
+                err_buf.extend(chunk[: 64 * 1024 - len(err_buf)])
+
+    dreno = threading.Thread(target=_drenar_stderr, daemon=True)
+    dreno.start()
+    prazo = threading.Timer(lim["timeout_s"], proc.kill)  # vale até o wait() terminar
+    prazo.start()
     try:
         _receber(proc.stdout, lim["saida_max_bytes"], out)
-    except Exception:
+        rc = proc.wait()
+    except BaseException:
         proc.kill()
+        proc.wait()
         raise
     finally:
-        timer.cancel()
-        err = proc.stderr.read().decode(errors="replace")
-        rc = proc.wait()
+        prazo.cancel()
+        dreno.join(timeout=5)
+    err = err_buf.decode(errors="replace")
+    if rc == -9 or rc == -signal.SIGKILL:
+        raise RuntimeError(f"worker isolado encerrado à força (tempo excedido de {lim['timeout_s']}s ou limite de recurso)")
     if rc != 0:
         raise RuntimeError(f"worker isolado falhou (código {rc}): {err.strip()[-400:]}")

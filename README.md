@@ -49,6 +49,7 @@ Códigos de saída: 0 ok · 1 erro · 2 extração INCOMPLETA · 3 isolamento in
 Ver `docs/FORMATO.md` (layout em disco, campos, hashes, gabarito, revisão) e
 `docs/DECISOES_PENDENTES.md` (decisões em aberto, licença AGPL do PyMuPDF, limites).
 
+- Tabelas com linhas desenhadas viram `tables[]` (células por recorte, vírgulas decimais preservadas) + recorte `kind=table`; o cabeçalho é a 1ª linha por *inferência* (`header_inferred`). Tabelas sem filetes não são detectadas.
 - Sobrescrito `^{..}`, subscrito `_{..}`, fração `\frac{num}{den}`; toda fração reconstruída tem alerta `frac_reconstructed`.
 - Alternativa só em figura: texto vazio + `choice_image_only` (info) + `asset_ids` da figura da mesma altura do rótulo.
 - Gabarito: `found` / `annulled` / `not_provided`; outro caderno/ano/dia é recusado. Nunca se infere resposta.
@@ -69,6 +70,5 @@ Ver `docs/FORMATO.md` (layout em disco, campos, hashes, gabarito, revisão) e
 ## Ainda não implementado
 
 - OCR/visão (adiado por decisão do responsável; ver `docs/DECISOES_PENDENTES.md`).
-- Tabelas estruturadas (células/colunas): tabelas saem como texto linear + recorte; `tables` é lista vazia.
 - Bbox para todos os campos; estados de gabarito ambíguo/incompatível; transcrição de texto dentro de figuras.
 - Comparação com a baseline v5 (não estava disponível).
