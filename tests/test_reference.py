@@ -166,3 +166,23 @@ def test_marca_dagua_removida_com_registro(y24, y25):
     for qs, _, omitted, _ in (y24, y25):
         assert not any("ENEM" in q.stem or any("ENEM" in c for c in q.choices.values()) for q in qs.values())
         assert any(o["reason"] == "marca-dagua" for o in omitted)
+
+
+# ---- fidelidade: campos-ouro (tests/gold/ouro.json) ----
+# Falhas CONHECIDAS hoje. Se um item passar a acertar, este teste falha de propósito: tire-o da lista
+# (melhora comprovada). Se um item novo passar a errar, também falha (regressão).
+OURO_FALHAS_CONHECIDAS = {
+    "2024-Q139-A", "2024-Q139-C", "2024-Q139-D", "2024-Q139-E",
+    "2024-Q141-A", "2024-Q141-B", "2024-Q141-C", "2024-Q141-D", "2024-Q141-E",
+    "2024-Q142-enunciado-misto-1", "2024-Q142-enunciado-misto-2",
+    "2024-Q149-B", "2024-Q149-D", "2024-Q94-enunciado-seta-equilibrio",
+}
+
+
+def test_fidelidade_contra_campos_ouro(y24, y25):
+    from extrator_enem import ouro
+    gold = ouro.carregar(Path(__file__).parent / "gold" / "ouro.json")
+    ano = {2024: y24[0], 2025: y25[0]}
+    res = ouro.medir(gold, lambda a, n: ano[a].get(n))
+    assert res["avaliados"] == len(gold["itens"]) and not res["ignorados"]
+    assert {e["id"] for e in res["erros"]} == OURO_FALHAS_CONHECIDAS

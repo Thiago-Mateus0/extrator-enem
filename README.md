@@ -72,6 +72,20 @@ e 2025 teve 6, e as 90 questões de cada prova foram encontradas.
 
 Questão com qualquer alerta que não seja `info` fica como `needs_review`. `extracted` **não** quer dizer revisado.
 
+## Medir fidelidade (campos-ouro)
+
+Os alertas dizem "olhe aqui"; os campos-ouro dizem se o texto extraído **é** o da prova.
+`tests/gold/ouro.json` lista valores esperados (alternativas, trechos do enunciado, tabelas) lidos no PDF.
+
+```bash
+extrator-enem ouro --ouro tests/gold/ouro.json --run 2024=<pasta da execução> --run 2025=<pasta da execução>
+```
+
+Hoje são 32 itens: 18 certos e 14 errados, e os 14 são os defeitos já conhecidos (Q139, Q141, Q149, Q142
+e a seta da Q94). Isso **não é a taxa de acerto do sistema**: o ouro foi montado em cima dos casos
+problemáticos, então a taxa é pessimista. Os valores foram lidos por adjudicação automatizada e **ainda
+precisam de conferência humana** antes de virarem meta.
+
 ## Outros comandos
 
 ```bash

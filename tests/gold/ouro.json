@@ -1,0 +1,313 @@
+{
+ "descricao": "Valores esperados lidos no recorte do PDF. Notação: expoente ^{..}, subscrito _{..}, fração \\frac{num}{den}; número misto = inteiro seguido de \\frac (convenção PROPOSTA, a confirmar). Espaços são ignorados na comparação.",
+ "adjudicacao": "automatizada, por leitura visual do recorte (2026-11-07). NÃO foi conferida por uma pessoa: quem responde pelo projeto deve revisar cada item antes de tratar estes números como meta.",
+ "itens": [
+  {
+   "id": "2024-Q139-A",
+   "ano": 2024,
+   "numero": 139,
+   "tipo": "alternativa",
+   "letra": "A",
+   "esperado": "\\frac{7!}{4!} × \\frac{6!}{4!}"
+  },
+  {
+   "id": "2024-Q139-B",
+   "ano": 2024,
+   "numero": 139,
+   "tipo": "alternativa",
+   "letra": "B",
+   "esperado": "\\frac{7!}{3! × 4!} × \\frac{6!}{2! × 4!}"
+  },
+  {
+   "id": "2024-Q139-C",
+   "ano": 2024,
+   "numero": 139,
+   "tipo": "alternativa",
+   "letra": "C",
+   "esperado": "\\frac{7!}{3! × 4!} + \\frac{6!}{2! × 4!} + \\frac{5!}{1! × 4!}"
+  },
+  {
+   "id": "2024-Q139-D",
+   "ano": 2024,
+   "numero": 139,
+   "tipo": "alternativa",
+   "letra": "D",
+   "esperado": "(\\frac{7!}{3! × 4!} + \\frac{6!}{2! × 4!}) × (\\frac{7!}{4! × 3!} + \\frac{6!}{1! × 5!}) × (\\frac{7!}{5! × 2!} + \\frac{6!}{0! × 6!})"
+  },
+  {
+   "id": "2024-Q139-E",
+   "ano": 2024,
+   "numero": 139,
+   "tipo": "alternativa",
+   "letra": "E",
+   "esperado": "(\\frac{7!}{3! × 4!} × \\frac{6!}{2! × 4!}) + (\\frac{7!}{4! × 3!} × \\frac{6!}{1! × 5!}) + (\\frac{7!}{5! × 2!} × \\frac{6!}{0! × 6!})"
+  },
+  {
+   "id": "2024-Q141-A",
+   "ano": 2024,
+   "numero": 141,
+   "tipo": "alternativa",
+   "letra": "A",
+   "esperado": "d(Q) = \\frac{1}{4} d(R)"
+  },
+  {
+   "id": "2024-Q141-B",
+   "ano": 2024,
+   "numero": 141,
+   "tipo": "alternativa",
+   "letra": "B",
+   "esperado": "d(Q) = \\frac{1}{2} d(R)"
+  },
+  {
+   "id": "2024-Q141-C",
+   "ano": 2024,
+   "numero": 141,
+   "tipo": "alternativa",
+   "letra": "C",
+   "esperado": "d(Q) = \\frac{3}{4} d(R)"
+  },
+  {
+   "id": "2024-Q141-D",
+   "ano": 2024,
+   "numero": 141,
+   "tipo": "alternativa",
+   "letra": "D",
+   "esperado": "d(Q) = \\frac{3}{2} d(R)"
+  },
+  {
+   "id": "2024-Q141-E",
+   "ano": 2024,
+   "numero": 141,
+   "tipo": "alternativa",
+   "letra": "E",
+   "esperado": "d(Q) = \\frac{2}{3} d(R)"
+  },
+  {
+   "id": "2024-Q142-enunciado-misto-1",
+   "ano": 2024,
+   "numero": 142,
+   "tipo": "enunciado_contem",
+   "esperado": "3 \\frac{1}{2} polegadas"
+  },
+  {
+   "id": "2024-Q142-enunciado-misto-2",
+   "ano": 2024,
+   "numero": 142,
+   "tipo": "enunciado_contem",
+   "esperado": "4 \\frac{5}{6} polegadas"
+  },
+  {
+   "id": "2024-Q149-A",
+   "ano": 2024,
+   "numero": 149,
+   "tipo": "alternativa",
+   "letra": "A",
+   "esperado": "\\frac{1}{25} + \\frac{1}{25} + \\frac{1}{25}"
+  },
+  {
+   "id": "2024-Q149-B",
+   "ano": 2024,
+   "numero": 149,
+   "tipo": "alternativa",
+   "letra": "B",
+   "esperado": "\\frac{24}{25} + \\frac{23}{24} + \\frac{1}{23}"
+  },
+  {
+   "id": "2024-Q149-C",
+   "ano": 2024,
+   "numero": 149,
+   "tipo": "alternativa",
+   "letra": "C",
+   "esperado": "\\frac{1}{25} × \\frac{1}{24} × \\frac{1}{23}"
+  },
+  {
+   "id": "2024-Q149-D",
+   "ano": 2024,
+   "numero": 149,
+   "tipo": "alternativa",
+   "letra": "D",
+   "esperado": "\\frac{24}{25} × \\frac{23}{25} × \\frac{1}{25}"
+  },
+  {
+   "id": "2024-Q149-E",
+   "ano": 2024,
+   "numero": 149,
+   "tipo": "alternativa",
+   "letra": "E",
+   "esperado": "\\frac{24}{25} × \\frac{23}{24} × \\frac{1}{23}"
+  },
+  {
+   "id": "2024-Q94-enunciado-seta-equilibrio",
+   "ano": 2024,
+   "numero": 94,
+   "tipo": "enunciado_contem",
+   "esperado": "⇌"
+  },
+  {
+   "id": "2024-Q94-tabela",
+   "ano": 2024,
+   "numero": 94,
+   "tipo": "tabela",
+   "indice": 0,
+   "esperado": [
+    [
+     "Creme dental",
+     "Agente de polimento",
+     "pH"
+    ],
+    [
+     "I",
+     "Bicarbonato de sódio",
+     "9,5"
+    ],
+    [
+     "II",
+     "Carbonato de cálcio",
+     "11,0"
+    ],
+    [
+     "III",
+     "Citrato de potássio",
+     "7,7"
+    ],
+    [
+     "IV",
+     "Dióxido de silício",
+     "6,9"
+    ],
+    [
+     "V",
+     "Fosfato de cálcio",
+     "7,3"
+    ]
+   ]
+  },
+  {
+   "id": "2024-Q154-tabela",
+   "ano": 2024,
+   "numero": 154,
+   "tipo": "tabela",
+   "indice": 0,
+   "esperado": [
+    [
+     "Tipo de serviço",
+     "Tempo necessário para a leitura completa do contrato (em minuto)"
+    ],
+    [
+     "A",
+     "36"
+    ],
+    [
+     "B",
+     "17"
+    ],
+    [
+     "C",
+     "27"
+    ],
+    [
+     "D",
+     "13"
+    ],
+    [
+     "E",
+     "13"
+    ],
+    [
+     "F",
+     "13"
+    ]
+   ]
+  },
+  {
+   "id": "2024-Q171-A",
+   "ano": 2024,
+   "numero": 171,
+   "tipo": "alternativa",
+   "letra": "A",
+   "esperado": "cone."
+  },
+  {
+   "id": "2024-Q171-B",
+   "ano": 2024,
+   "numero": 171,
+   "tipo": "alternativa",
+   "letra": "B",
+   "esperado": "cilindro."
+  },
+  {
+   "id": "2024-Q171-C",
+   "ano": 2024,
+   "numero": 171,
+   "tipo": "alternativa",
+   "letra": "C",
+   "esperado": "pirâmide."
+  },
+  {
+   "id": "2024-Q171-D",
+   "ano": 2024,
+   "numero": 171,
+   "tipo": "alternativa",
+   "letra": "D",
+   "esperado": "tronco de cone."
+  },
+  {
+   "id": "2024-Q171-E",
+   "ano": 2024,
+   "numero": 171,
+   "tipo": "alternativa",
+   "letra": "E",
+   "esperado": "tronco de pirâmide."
+  },
+  {
+   "id": "2024-Q96-A",
+   "ano": 2024,
+   "numero": 96,
+   "tipo": "alternativa",
+   "letra": "A",
+   "esperado": "Ácido carboxílico."
+  },
+  {
+   "id": "2024-Q111-enunciado-expoente",
+   "ano": 2024,
+   "numero": 111,
+   "tipo": "enunciado_contem",
+   "esperado": "1 m^{3} de biogás"
+  },
+  {
+   "id": "2025-Q124-enunciado-expoente-1",
+   "ano": 2025,
+   "numero": 124,
+   "tipo": "enunciado_contem",
+   "esperado": "50 m^{2} de área"
+  },
+  {
+   "id": "2025-Q124-enunciado-expoente-2",
+   "ano": 2025,
+   "numero": 124,
+   "tipo": "enunciado_contem",
+   "esperado": "10^{4} Pa"
+  },
+  {
+   "id": "2025-Q124-enunciado-expoente-3",
+   "ano": 2025,
+   "numero": 124,
+   "tipo": "enunciado_contem",
+   "esperado": "1 250 kg/m^{3}"
+  },
+  {
+   "id": "2025-Q124-enunciado-expoente-4",
+   "ano": 2025,
+   "numero": 124,
+   "tipo": "enunciado_contem",
+   "esperado": "10 m/s^{2}"
+  },
+  {
+   "id": "2025-Q166-enunciado-expoente",
+   "ano": 2025,
+   "numero": 166,
+   "tipo": "enunciado_contem",
+   "esperado": "20 000 cm^{3}"
+  }
+ ]
+}
