@@ -86,6 +86,7 @@ def test_saida_valida_e_gravada_pelo_host(tmp_path):
 def test_worker_travado_e_morto_no_prazo_sem_bloquear_o_host(tmp_path, monkeypatch):
     """Worker que nunca termina e despeja stderr: o host precisa abortar no prazo, não ficar preso."""
     import time
+    monkeypatch.setattr(sandbox, "_backend", lambda: "bwrap")  # o teste simula o worker via _cmd (bwrap)
     monkeypatch.setattr(sandbox, "sonda", lambda: {})
     monkeypatch.setattr(sandbox, "_cmd", lambda *a, **k: [
         sys.executable, "-c",
