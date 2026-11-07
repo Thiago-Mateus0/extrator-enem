@@ -1,4 +1,3 @@
-import csv
 import json
 import shutil
 import sys
@@ -7,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from extrator_enem import pipeline
-from extrator_enem.sandbox import SandboxUnavailable
 
 P = Path(__file__).resolve().parents[1] / "dados" / "provas"
 pytestmark = pytest.mark.skipif(

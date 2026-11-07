@@ -1,8 +1,10 @@
 import argparse
 import json
 import sys
+
 from pathlib import Path
 
+from . import ouro
 from .pipeline import IdentityError, compare, extract
 from .records import question_id
 from .sandbox import SandboxUnavailable, sonda
@@ -30,6 +32,9 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("compare", help="compara duas execuções (baseline x candidato)")
     c.add_argument("run_a")
     c.add_argument("run_b")
+    o = sub.add_parser("ouro", help="mede a fidelidade da extração contra campos-ouro (valores lidos no PDF)")
+    o.add_argument("--ouro", required=True, help="arquivo JSON de campos-ouro")
+    o.add_argument("--run", action="append", required=True, metavar="ANO=PASTA_DA_EXECUCAO")
     r = sub.add_parser("review", help="registra veredito HUMANO preso ao hash do conteúdo atual")
     r.add_argument("--dados", required=True)
     r.add_argument("--source", required=True, help="source_id (SHA-256 completo da prova)")
@@ -46,6 +51,10 @@ def main(argv: list[str] | None = None) -> int:
                           {k: v for k, v in (("ano", a.ano), ("dia", a.dia), ("caderno", a.caderno)) if v})
             print(_resumo(rep))
             return 0 if rep["estado"] == "completo" else 2
+        elif a.cmd == "ouro":
+            runs = {int(k): Path(v) for k, v in (x.split("=", 1) for x in a.run)}
+            res = ouro.medir(ouro.carregar(Path(a.ouro)), ouro.obter_de_runs(runs))
+            print(json.dumps(res, ensure_ascii=False, indent=1))
         elif a.cmd == "compare":
             print(json.dumps(compare(a.run_a, a.run_b), ensure_ascii=False, indent=1))
         elif a.cmd == "review":

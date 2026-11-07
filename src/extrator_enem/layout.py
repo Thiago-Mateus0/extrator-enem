@@ -82,7 +82,7 @@ def _fractions(lines: list[Line], bars: list[tuple], mid: float) -> list[Line]:
     consumed: set[int] = set()
     fracs: list[Line] = []
     for bx0, bx1, by in sorted(bars, key=lambda b: (b[2], b[0])):
-        def inside(l: Line) -> bool:
+        def inside(l: Line, bx0=bx0, bx1=bx1) -> bool:
             return l.x0 >= bx0 - 4 and l.x1 <= bx1 + 4
         num = [i for i, l in enumerate(lines) if i not in consumed and inside(l) and 0 < by - _yc(l) < 16]
         den = [i for i, l in enumerate(lines) if i not in consumed and inside(l) and 0 < _yc(l) - by < 16]
@@ -119,7 +119,6 @@ def _fractions(lines: list[Line], bars: list[tuple], mid: float) -> list[Line]:
             rows[-1].append(m)
         else:
             rows.append([m])
-    first_idx = {}
     out_lines: list[tuple[int, Line]] = []
     for r in rows:
         r.sort(key=lambda l: l.x0)

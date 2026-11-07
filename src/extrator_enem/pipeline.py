@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .records import INGESTION_VERSION, build_record
 from .sandbox import run_worker
-from .store import Store, safe_label, sha256_file
+from .store import Store, safe_label
 
 
 class IdentityError(ValueError):

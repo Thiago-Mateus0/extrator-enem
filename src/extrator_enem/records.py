@@ -44,7 +44,6 @@ def build_record(q: dict, ans: dict, source_sha: str, gabarito_sha: str | None, 
               "origin": gabarito_sha if gabarito_sha else None,
               "origin_label": "gabarito oficial (PDF)" if gabarito_sha else None}
     issues = list(q["issues"])
-    choice_letters = {c["letter"] for c in choices}
     if ans["state"] == "found":
         c = next((c for c in choices if c["letter"] == ans["letter"]), None)
         if c is None or not (c["text"] or c["asset_ids"]):
