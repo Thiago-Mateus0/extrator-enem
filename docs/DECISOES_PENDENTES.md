@@ -8,7 +8,7 @@
    interna; confirmar se a distribuição pretendida é compatível ou se precisa de licença comercial / outro parser.
 3. **Metas de melhoria** com conjunto e denominador explícitos (briefing §12): não há meta numérica aprovada.
 4. **Contrato final do dataset** (estados de gabarito, matemática original×normalizada): combinar com curadoria.
-5. **Baseline v5 / referência humana**: as execuções v5 e o código `higgs.ingestion` não estavam disponíveis; por isso
+5. **Baseline v5 / referência humana**: as execuções v5 e o código de ingestão da plataforma não estavam disponíveis; por isso
    não há comparação baseline×candidato por caso. `extrator-enem compare` já compara duas execuções deste extrator.
 
 ## Candidatas para OCR/visão (fila, sem execução)

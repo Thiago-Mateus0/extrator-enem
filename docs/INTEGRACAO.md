@@ -1,9 +1,9 @@
-# Integração com o repo real (higgs)
+# Integração com o repositório da plataforma
 
 **Status:** pronto para virar branch/PR. **Não foi enviado**: não tenho a URL/acesso do repo real nem autorização
 para publicar PDFs, dados ou PR em nome do responsável. Estas são as etapas, na ordem.
 
-## 1. Mapeamento de módulos (extrator-enem → `src/higgs/ingestion/`)
+## 1. Mapeamento de módulos (extrator-enem → `src/<plataforma>/ingestion/`)
 
 | aqui | lá | ação |
 |---|---|---|

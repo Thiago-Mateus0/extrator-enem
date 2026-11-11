@@ -16,8 +16,8 @@ Este repositório é a peça de extração, isolada e testável; a integração 
 [`docs/INTEGRACAO.md`](docs/INTEGRACAO.md).
 
 Foi feito e testado com o 2º dia (caderno 5, amarelo), questões 91–180, das provas de 2024 e 2025.
-Não usa IA nem internet. É Python 3.11+ com PyMuPDF. O briefing original está em
-`BRIEFING_DESENVOLVEDOR_EXTRATOR_ENEM.md`.
+Não usa IA nem internet. É Python 3.11+ com PyMuPDF. O briefing original veio de um projeto privado e não está neste repositório; as referências a ele (§7.2, §12) são só
+contexto.
 
 ## Como rodar
 
@@ -72,7 +72,7 @@ CI sem precisar dos PDFs do ENEM (que não são versionados).
 | Gabarito: letra / anulada | 89 / 1 | 87 / 3 |
 | Tempo | ~20 s | ~20 s |
 
-Dos 16 defeitos conhecidos do briefing: 1 foi corrigido (gráficos da 2025 Q129), 14 são sinalizados e 1
+Dos 16 defeitos conhecidos (lista do briefing original): 1 foi corrigido (gráficos da 2025 Q129), 14 são sinalizados e 1
 passa sem alerta (o número misto da 2024 Q142). Na Q94 o alerta existe, mas a seta de equilíbrio continua
 sem ser recuperada. Esses dois casos estão nos testes como falha esperada. Sinalizar **não é corrigir**,
 e estes números não medem fidelidade.
