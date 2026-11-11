@@ -1,5 +1,7 @@
 # extrator-enem
 
+[![CI](https://github.com/Thiago-Mateus0/extrator-enem/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Thiago-Mateus0/extrator-enem/actions/workflows/ci.yml)
+
 Lê a prova e o gabarito oficiais do ENEM (PDF) e entrega cada questão em JSON: enunciado, alternativas,
 figuras, tabelas, fórmulas e a resposta certa. O que o programa não tem certeza de ter lido direito
 vira um **alerta**, em vez de passar batido.
@@ -44,6 +46,13 @@ Na primeira vez com Docker, ele monta a imagem (precisa de internet só nessa et
 
 Testei no Linux, com os dois backends, e a mesma prova deu resultado idêntico. **macOS e Windows ainda
 não foram testados.** O `extrator-enem sonda` é o primeiro teste nessas máquinas.
+
+## Ver o formato sem as provas oficiais
+
+Um registro de exemplo (questão sintética, gabarito e hashes fictícios) está em
+[`docs/exemplo/questao-91.json`](docs/exemplo/questao-91.json). Os testes em `tests/test_sintetico.py` geram um PDF
+pequeno na hora, rodam o parser de verdade e conferem que esse exemplo continua igual à saída real. Eles rodam na
+CI sem precisar dos PDFs do ENEM (que não são versionados).
 
 ## Resultado atual
 

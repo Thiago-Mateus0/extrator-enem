@@ -1,0 +1,110 @@
+{
+  "record_version": "2",
+  "question_id": "q-aaaaaaaaaaaa-091",
+  "number": 91,
+  "status": "extracted",
+  "content_sha256": "ebffa516615204418c2732fbea20308ac76f23677c7ed946c59d7df2d6a64ebf",
+  "stem": "Qual é a capital do Brasil?",
+  "choices": [
+    {
+      "letter": "A",
+      "text": "Rio de Janeiro",
+      "asset_ids": []
+    },
+    {
+      "letter": "B",
+      "text": "Brasília",
+      "asset_ids": []
+    },
+    {
+      "letter": "C",
+      "text": "São Paulo",
+      "asset_ids": []
+    },
+    {
+      "letter": "D",
+      "text": "Salvador",
+      "asset_ids": []
+    },
+    {
+      "letter": "E",
+      "text": "Recife",
+      "asset_ids": []
+    }
+  ],
+  "tables": [],
+  "answer": {
+    "letter": "B",
+    "state": "found",
+    "origin": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "origin_label": "gabarito oficial (PDF)"
+  },
+  "location": {
+    "page_start": 1,
+    "page_end": 1
+  },
+  "source": {
+    "source_id": "src-aaaaaaaaaaaa",
+    "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "version": "1",
+    "label": "prova-sintetica.pdf"
+  },
+  "assets": [],
+  "snapshots": [],
+  "regions": {
+    "A": {
+      "page": 1,
+      "bbox": [
+        50.0,
+        77.2,
+        123.9,
+        91.0
+      ]
+    },
+    "B": {
+      "page": 1,
+      "bbox": [
+        50.0,
+        91.2,
+        92.8,
+        105.0
+      ]
+    },
+    "C": {
+      "page": 1,
+      "bbox": [
+        50.0,
+        105.2,
+        106.1,
+        119.0
+      ]
+    },
+    "D": {
+      "page": 1,
+      "bbox": [
+        50.0,
+        119.2,
+        99.5,
+        133.0
+      ]
+    },
+    "E": {
+      "page": 1,
+      "bbox": [
+        50.0,
+        133.2,
+        87.8,
+        147.0
+      ]
+    }
+  },
+  "issues": [],
+  "annotations": [],
+  "provenance": {
+    "ingestion_version": "1",
+    "extractor": "extrator-enem/pymupdf-native",
+    "run_id": "run-exemplo",
+    "source_label": "prova-sintetica.pdf"
+  },
+  "reprocessing": {}
+}
