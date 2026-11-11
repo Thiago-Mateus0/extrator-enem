@@ -6,6 +6,15 @@ Lê a prova e o gabarito oficiais do ENEM (PDF) e entrega cada questão em JSON:
 figuras, tabelas, fórmulas e a resposta certa. O que o programa não tem certeza de ter lido direito
 vira um **alerta**, em vez de passar batido.
 
+## Por que existe
+
+Construí este extrator para a **plataforma de estudos que estou desenvolvendo com um colega e sócio**. A plataforma
+precisa de um banco de questões do ENEM confiável, e copiar questão de PDF na mão não escala nem dá para auditar.
+Por isso o extrator prioriza **não errar em silêncio**: tudo que ele não tem certeza de ter lido direito vira alerta
+para uma pessoa conferir, e cada questão guarda de onde veio (hash do PDF, página, recorte da imagem).
+Este repositório é a peça de extração, isolada e testável; a integração com a plataforma está descrita em
+[`docs/INTEGRACAO.md`](docs/INTEGRACAO.md).
+
 Foi feito e testado com o 2º dia (caderno 5, amarelo), questões 91–180, das provas de 2024 e 2025.
 Não usa IA nem internet. É Python 3.11+ com PyMuPDF. O briefing original está em
 `BRIEFING_DESENVOLVEDOR_EXTRATOR_ENEM.md`.
